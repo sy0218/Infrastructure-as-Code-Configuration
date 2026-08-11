@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-Ubuntu 24.04 서버를 Ansible로 프로비저닝하는 IaC 저장소. Control Node(localhost)에서 3대 노드(ap=192.168.56.200, s1=.201, s2=.202)에 password 기반 SSH로 배포한다. OS 기본 설정(ubuntu) → K8s 클러스터(kubeadm + containerd + Calico) → Longhorn 사전 준비 / Terraform / Docker / Kafka(KRaft 로컬 클러스터) / PostgreSQL(TimescaleDB) / MinIO / Neo4j(Community Edition) / BuildKit(빌드 데몬) 설치 / Airflow 코드 저장소 부트스트랩(local_git)을 플레이북 11개로 나눠 담당한다. 모든 문서·주석은 한국어로 작성한다.
+Ubuntu 24.04 서버를 Ansible로 프로비저닝하는 IaC 저장소. Control Node(localhost)에서 3대 노드(ap=192.168.56.200, s1=.201, s2=.202)에 password 기반 SSH로 배포한다. OS 기본 설정(ubuntu) → K8s 클러스터(kubeadm + containerd + Calico) → Longhorn 사전 준비 / Terraform / Helm / Docker / Kafka(KRaft 로컬 클러스터) / PostgreSQL(TimescaleDB) / MinIO / Neo4j(Community Edition) / BuildKit(빌드 데몬) 설치 / Airflow 코드 저장소 부트스트랩(local_git)을 플레이북 12개로 나눠 담당한다. 모든 문서·주석은 한국어로 작성한다.
 
 ## 실행 명령어
 
@@ -20,6 +20,7 @@ bin/start_ansible.sh <프로젝트 절대경로> etc_hosts   # 예: etc_hosts �
 bin/start_kubernetes.sh <프로젝트 절대경로> all      # k8s_ansible.yml — K8s 클러스터 구성
 bin/start_longhorn.sh <프로젝트 절대경로> all        # longhorn_ansible.yml — Longhorn 노드 사전 준비
 bin/start_terraform.sh <프로젝트 절대경로> all       # terraform_ansible.yml — Terraform 설치
+bin/start_helm.sh <프로젝트 절대경로> all            # helm_ansible.yml — Helm 설치 (300 부터의 Helm 차트 스택 배포용 CLI)
 bin/start_kafka.sh <프로젝트 절대경로> all           # kafka_ansible.yml — Kafka 설치 (KRaft 로컬 클러스터)
 
 # 1인자 스크립트 — <프로젝트 절대경로>만 전달
@@ -36,7 +37,7 @@ ansible-playbook ubuntu_ansible.yml --tags etc_hosts   # 롤 단독 재실행
 ```
 
 - **반드시 프로젝트 루트에서 실행**해야 한다 — ansible.cfg의 inventory/roles_path/callback_plugins가 상대 경로 기준이다. start_*.sh가 `cd`를 대신 해주는 이유가 이것이다.
-- ubuntu·k8s·kafka·longhorn·terraform 플레이북은 **모든 롤 항목에 롤명과 동일한 태그**가 있어 TARGET 인자(또는 `--tags`)로 어떤 롤이든 단독 재실행할 수 있다. docker·postgresql·minio·neo4j·local_git 플레이북에는 태그가 없다(롤 1개짜리).
+- ubuntu·k8s·kafka·longhorn·terraform·helm 플레이북은 **모든 롤 항목에 롤명과 동일한 태그**가 있어 TARGET 인자(또는 `--tags`)로 어떤 롤이든 단독 재실행할 수 있다. docker·postgresql·minio·neo4j·local_git 플레이북에는 태그가 없다(롤 1개짜리).
 - 실행 출력 끝에는 커스텀 콜백 [callback_plugins/summary_table.py](callback_plugins/summary_table.py)(ansible.cfg `callback_plugins = ./callback_plugins`)가 PLAY RECAP 뒤 롤·태스크·호스트별 요약 표를 덧붙인다. aggregate 타입이라 stdout_callback(yaml)을 대체하지 않으며, assert 태스크는 PASS/FAIL로 표기한다.
 - 핀 버전 후보 확인: `apt-cache madison <패키지>` (저장소 등록 후)
 - k8s 롤에는 `ansible.posix`, `community.general` 컬렉션이 필요하다. collection_check 롤은 **검증만 하고 설치하지 않는다** — 없으면 `ansible-galaxy collection install`로 직접 설치.
@@ -45,7 +46,7 @@ ansible-playbook ubuntu_ansible.yml --tags etc_hosts   # 롤 단독 재실행
 
 ### 변수는 전부 group_vars/에 (롤에는 defaults/vars 없음)
 
-- 38개 롤 어디에도 `defaults/`, `vars/`가 없다. 모든 변수는 그룹별 [group_vars/](group_vars/)(`Ubuntu_Servers`, `kubernetes`, `longhorn`, `local_git`, `terraform`, `docker`, `kafka`, `postgres`, `minio`, `neo4j` — 그룹당 파일 하나)에 중앙 집중되어 있고, 버전 핀·CIDR·경로 등 운영 지식이 주석으로 함께 기록되어 있다.
+- 39개 롤 어디에도 `defaults/`, `vars/`가 없다. 모든 변수는 그룹별 [group_vars/](group_vars/)(`Ubuntu_Servers`, `kubernetes`, `longhorn`, `local_git`, `terraform`, `helm`, `docker`, `kafka`, `postgres`, `minio`, `neo4j` — 그룹당 파일 하나)에 중앙 집중되어 있고, 버전 핀·CIDR·경로 등 운영 지식이 주석으로 함께 기록되어 있다.
 - 인벤토리 [host.yml](host.yml)에는 호스트/그룹 구조와 호스트 고유값(`ansible_host`, `kafka_node_id`), localhost의 접속 설정(`ansible_connection: local`, `ansible_become_password`)만 남긴다. `group_vars/`는 인벤토리 파일과 같은 디렉토리에 있어 Ansible이 자동으로 읽는다 — 플레이북·ansible.cfg·bin 스크립트는 이를 위해 아무것도 지정하지 않는다.
 - **파일명은 그룹명과 대소문자까지 정확히 일치해야 한다**(`group_vars/Ubuntu_Servers.yml`). 어긋나면 조용히 로드되지 않아 변수 미정의로 실패한다.
 - 롤이 어떤 변수를 보는지는 플레이북의 `hosts:` 그룹이 결정한다. 예: k8s_ansible.yml Play 1은 `hosts: kubernetes_master` + `connection: local` — 실행은 컨트롤 노드에서 되지만 kubernetes 그룹 변수를 상속받기 위한 구성이다.

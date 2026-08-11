@@ -1,0 +1,10 @@
+# =====================================================
+# Helm 설치
+# =====================================================
+- name: "[ Helm Setup.. ]"
+  hosts: helm
+  become: true
+  gather_facts: false
+
+  roles:
+    - { role: helm, tags: ['helm'] } # 공식 CDN 바이너리 설치 + 버전 고정 링크

@@ -302,6 +302,7 @@ Infrastructure-as-Code-Ansible/
 │   ├── longhorn.yml
 │   ├── local_git.yml
 │   ├── terraform.yml
+│   ├── helm.yml
 │   ├── docker.yml
 │   ├── kafka.yml
 │   ├── postgres.yml
@@ -313,6 +314,7 @@ Infrastructure-as-Code-Ansible/
 ├── longhorn_ansible.yml   # Longhorn 사전 준비 플레이북
 ├── local_git_ansible.yml  # Airflow Git 저장소 부트스트랩 플레이북
 ├── terraform_ansible.yml  # Terraform 설치 플레이북
+├── helm_ansible.yml       # Helm 설치 플레이북
 ├── docker_ansible.yml     # Docker 설치 플레이북
 ├── kafka_ansible.yml      # Kafka(KRaft) 설치 플레이북
 ├── postgresql_ansible.yml # PostgreSQL(TimescaleDB) 설치 플레이북
@@ -326,6 +328,7 @@ Infrastructure-as-Code-Ansible/
 │   ├── start_longhorn.sh      # Longhorn 사전 준비 실행
 │   ├── start_local_git.sh     # Git 저장소 부트스트랩 실행
 │   ├── start_terraform.sh     # Terraform 설치 실행
+│   ├── start_helm.sh          # Helm 설치 실행
 │   ├── start_docker.sh        # Docker 설치 실행
 │   ├── start_kafka.sh         # Kafka 설치 실행
 │   ├── start_postgresql.sh    # PostgreSQL 설치 실행
@@ -335,7 +338,7 @@ Infrastructure-as-Code-Ansible/
 ├── COMMIT_CONVENTION.md  # Git 커밋 규칙
 ├── callback_plugins/
 │   └── summary_table.py  # 실행 결과 요약 표 callback 플러그인
-└── roles/                # 기능별 Ansible Role (38종)
+└── roles/                # 기능별 Ansible Role (39종)
     ├── control/
     ├── packages/
     ├── java/
@@ -370,6 +373,9 @@ sudo /my_project/Infrastructure-as-Code-Ansible/bin/ansible_setup.sh
 
 # Terraform 설치 (terraform_ansible.yml)
 /my_project/Infrastructure-as-Code-Ansible/bin/start_terraform.sh /my_project/Infrastructure-as-Code-Ansible all
+
+# Helm 설치 (helm_ansible.yml)
+/my_project/Infrastructure-as-Code-Ansible/bin/start_helm.sh /my_project/Infrastructure-as-Code-Ansible all
 
 # Docker 설치 (docker_ansible.yml)
 /my_project/Infrastructure-as-Code-Ansible/bin/start_docker.sh /my_project/Infrastructure-as-Code-Ansible all
@@ -635,7 +641,7 @@ class CallbackModule(CallbackBase):
 | `kubernetes` (`kubernetes_master`=ap / `kubernetes_workers`=s1, s2) | ap / s1 / s2 | k8s |
 | `longhorn` / `docker` / `kafka` | ap / s1 / s2 | longhorn / docker / kafka |
 | `postgres` / `minio` / `neo4j` | ap | postgresql / minio / neo4j |
-| `terraform` / `local_git` | s2 | terraform / local_git |
+| `terraform` / `helm` / `local_git` | s2 | terraform / helm / local_git |
 
 ---
 </br>
@@ -675,6 +681,15 @@ class CallbackModule(CallbackBase):
 > **Terraform 설치 플레이북입니다.**
 - **Play 1** → terraform 그룹에 HashiCorp 저장소 등록 + Terraform 설치/버전 고정
 - 대상 호스트와 버전은 인벤토리 `terraform` 그룹에서 관리
+
+---
+</br>
+
+## 📜 Helm 플레이북 (helm_ansible.yml)
+> **Helm 설치 플레이북입니다.**
+- **Play 1** → helm 그룹에 공식 CDN(get.helm.sh) 바이너리 설치 + sha256 검증 + 버전 고정 링크
+- 버전·체크섬·설치 경로는 인벤토리 `helm` 그룹에서 관리 (`helm_version`, `helm_sha256`, `helm_install_root`)
+- apt 저장소(baltocdn) 대신 바이너리 설치 — 랩 네트워크에서 SSL 인증서 검증이 실패한다(롤 주석 참조)
 
 ---
 </br>
@@ -911,6 +926,10 @@ fail_msg: "[FAIL] sshpass install failed"
 
 ### 🔹 terraform → [`📂 terraform.md`](./roles/terraform/tasks/terraform.md)
 - HashiCorp 저장소 등록 + Terraform 설치·버전 고정 (인벤토리 `terraform_version` 기준)
+---
+
+### 🔹 helm → [`📂 helm.md`](./roles/helm/tasks/helm.md)
+- Helm CLI 설치 → 공식 CDN tarball + sha256 검증 + 버전 고정 링크(`/usr/local/bin/helm`) (인벤토리 `helm_version`, `helm_sha256` 기준)
 ---
 
 ### 🔹 docker → [`📂 docker.md`](./roles/docker/tasks/docker.md)

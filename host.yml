@@ -37,6 +37,10 @@ all:
       hosts:
         s2:
 
+    helm:
+      hosts:
+        s2: # terraform 과 같은 배포 CLI 머신 (Helm 차트 스택 배포용)
+
     docker:
       hosts:
         ap:

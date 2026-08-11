@@ -1,0 +1,93 @@
+# =========================================================================
+# Helm 설치 → 공식 CDN 바이너리 + 버전 고정 링크
+# =========================================================================
+
+# -------------------------------------------------------------------------
+# 1. 디렉토리 생성 (file 모듈 자체가 멱등)
+# -------------------------------------------------------------------------
+- name: "Create helm directories"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ helm_install_root }}"
+    - "{{ helm_install_root }}/bin"
+    - "{{ helm_install_root }}/dist"
+    - "{{ helm_install_root }}/dist/v{{ helm_version }}" # 버전별 압축 해제 자리
+
+# -------------------------------------------------------------------------
+# 2. tarball 다운로드 (파일명에 버전 포함 → 버전 변경 시에만 새로 받음)
+#    → checksum 핀: 불완전 다운로드/변조를 받는 즉시 잡는다.
+#    →  값 확인: curl -fsSL https://get.helm.sh/helm-v<버전>-linux-amd64.tar.gz.sha256sum
+# -------------------------------------------------------------------------
+- name: "Download helm tarball"
+  get_url:
+    url: "https://get.helm.sh/helm-v{{ helm_version }}-linux-amd64.tar.gz"
+    dest: "{{ helm_install_root }}/dist/helm-v{{ helm_version }}-linux-amd64.tar.gz"
+    checksum: "sha256:{{ helm_sha256 }}"
+    owner: root
+    group: root
+    mode: '0644'
+  register: helm_tarball
+  retries: 3 # 외부망 다운로드 불안정 대비
+  delay: 10
+  until: helm_tarball is succeeded
+
+# -------------------------------------------------------------------------
+# 3. 압축 해제 (버전별 디렉토리라 creates 가드가 버전 교체를 막지 않는다)
+# -------------------------------------------------------------------------
+- name: "Extract helm tarball"
+  unarchive:
+    src: "{{ helm_install_root }}/dist/helm-v{{ helm_version }}-linux-amd64.tar.gz"
+    dest: "{{ helm_install_root }}/dist/v{{ helm_version }}"
+    remote_src: true
+    creates: "{{ helm_install_root }}/dist/v{{ helm_version }}/linux-amd64/helm"
+
+# -------------------------------------------------------------------------
+# 4. 실행 파일 배치 (copy 자체가 내용 비교로 멱등)
+# -------------------------------------------------------------------------
+- name: "Install helm binary as versioned file"
+  copy:
+    src: "{{ helm_install_root }}/dist/v{{ helm_version }}/linux-amd64/helm"
+    dest: "{{ helm_install_root }}/bin/helm-v{{ helm_version }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0755'
+
+# -------------------------------------------------------------------------
+# 5. 심볼릭 링크 (file 모듈 자체가 멱등 / 버전 변경 시 링크만 교체되어 롤백이 쉽다)
+# -------------------------------------------------------------------------
+- name: "Link helm into PATH"
+  file:
+    src: "{{ helm_install_root }}/bin/helm-v{{ helm_version }}"
+    path: /usr/local/bin/helm
+    state: link
+    force: true # 수동 설치된 실파일이 있어도 링크로 교체(없으면 파일 → 링크 전환 거부로 실패)
+
+# -------------------------------------------------------------------------
+# 6. 검증
+# -------------------------------------------------------------------------
+# 바이너리 동작 + PATH 노출 확인 (--short 는 클러스터에 접속하지 않는다)
+- name: "Check helm binary"
+  command: helm version --short
+  register: helm_bin_check
+  changed_when: false
+
+# 링크가 핀 버전을 가리키는지 확인 (stat 은 조회 전용)
+- name: "Check helm link target"
+  stat:
+    path: /usr/local/bin/helm
+  register: helm_link
+
+- name: "Assert helm installed and version pinned"
+  assert:
+    that:
+      - helm_bin_check.stdout.startswith("v" ~ helm_version) # 고정 버전 일치 (조건문 안에서는 {{ }} 금지)
+      - helm_link.stat.islnk # PATH 의 helm 이 링크다
+      - helm_link.stat.lnk_target == helm_install_root ~ "/bin/helm-v" ~ helm_version # 링크가 핀 버전을 가리킨다
+    success_msg: "Good!.. | helm {{ helm_bin_check.stdout }} installed & linked"
+    fail_msg: "ERROR!.. | helm version mismatch or link broken"
