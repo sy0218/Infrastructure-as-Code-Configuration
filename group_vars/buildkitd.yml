@@ -13,6 +13,6 @@ buildkit_install_root: /application/buildkit
 # [주의] 비밀번호는 Terraform 200-harbor secrets.auto.tfvars 의
 # harbor_admin_password 와 글자 그대로 같아야 한다.
 #########################################
-buildkit_registry: "data-layer-harbor"
+buildkit_registry: "data-layer-harbor:80"
 buildkit_registry_user: "admin"
 buildkit_registry_password: "Harbor12345"

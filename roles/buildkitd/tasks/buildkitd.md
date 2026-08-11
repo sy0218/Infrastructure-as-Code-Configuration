@@ -184,8 +184,6 @@
 #########################################
 # BuildKit 설치 버전 고정 (buildkitd 사용)
 # → docker 없이 이미지를 빌드/push 하기 위한 데몬
-# → runc 는 없으면 설치, 있으면 그대로 둔다 (state=present — K8s 노드에서는
-#   containerd 롤이 hold 한 짝 버전을 건드리지 않는다.)
 #########################################
 buildkit_version: "0.32.2"
 
@@ -198,7 +196,7 @@ buildkit_install_root: /application/buildkit
 # [주의] 비밀번호는 Terraform 200-harbor secrets.auto.tfvars 의
 # harbor_admin_password 와 글자 그대로 같아야 한다.
 #########################################
-buildkit_registry: "data-layer-harbor"
+buildkit_registry: "data-layer-harbor:80"
 buildkit_registry_user: "admin"
 buildkit_registry_password: "Harbor12345"
 ```
