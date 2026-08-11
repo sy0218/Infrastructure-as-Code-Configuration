@@ -306,7 +306,8 @@ Infrastructure-as-Code-Ansible/
 │   ├── kafka.yml
 │   ├── postgres.yml
 │   ├── minio.yml
-│   └── neo4j.yml
+│   ├── neo4j.yml
+│   └── buildkitd.yml
 ├── ubuntu_ansible.yml     # 운영 서버 Configuration 플레이북
 ├── k8s_ansible.yml        # K8s 클러스터 구성 플레이북
 ├── longhorn_ansible.yml   # Longhorn 사전 준비 플레이북
@@ -317,6 +318,7 @@ Infrastructure-as-Code-Ansible/
 ├── postgresql_ansible.yml # PostgreSQL(TimescaleDB) 설치 플레이북
 ├── minio_ansible.yml      # MinIO(SNSD) 설치 플레이북
 ├── neo4j_ansible.yml      # Neo4j 설치 플레이북
+├── buildkitd_ansible.yml  # BuildKit(빌드 데몬) 설치 플레이북
 ├── bin/
 │   ├── ansible_setup.sh       # Ansible 설치 (Control Node용)
 │   ├── start_ansible.sh       # 운영 서버 Configuration 실행
@@ -328,7 +330,8 @@ Infrastructure-as-Code-Ansible/
 │   ├── start_kafka.sh         # Kafka 설치 실행
 │   ├── start_postgresql.sh    # PostgreSQL 설치 실행
 │   ├── start_minio.sh         # MinIO 설치 실행
-│   └── start_neo4j.sh         # Neo4j 설치 실행
+│   ├── start_neo4j.sh         # Neo4j 설치 실행
+│   └── start_buildkitd.sh     # BuildKit 설치 실행
 ├── COMMIT_CONVENTION.md  # Git 커밋 규칙
 ├── callback_plugins/
 │   └── summary_table.py  # 실행 결과 요약 표 callback 플러그인
@@ -382,6 +385,10 @@ sudo /my_project/Infrastructure-as-Code-Ansible/bin/ansible_setup.sh
 
 # Neo4j 설치 (neo4j_ansible.yml)
 /my_project/Infrastructure-as-Code-Ansible/bin/start_neo4j.sh /my_project/Infrastructure-as-Code-Ansible all
+
+# BuildKit 설치 (buildkitd_ansible.yml) — docker 없는 이미지 빌드/push 데몬
+# ⚠ push 는 200-harbor apply 이후에나 가능하다 (설치 자체는 언제든 무방)
+/my_project/Infrastructure-as-Code-Ansible/bin/start_buildkitd.sh /my_project/Infrastructure-as-Code-Ansible
 
 # Airflow 코드 저장소 부트스트랩 (local_git_ansible.yml)
 # ⚠ Terraform 303-git apply 뒤, 304-airflow apply 앞에서만 실행

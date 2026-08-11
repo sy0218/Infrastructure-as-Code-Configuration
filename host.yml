@@ -63,3 +63,7 @@ all:
     neo4j:
       hosts:
         ap:
+
+    buildkitd:
+      hosts:
+        s2: # 빌드 머신

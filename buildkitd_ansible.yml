@@ -1,0 +1,10 @@
+# =====================================================
+# BuildKit 설치 (docker 없는 이미지 빌드/push)
+# =====================================================
+- name: "[ BuildKit Setup.. ]"
+  hosts: buildkitd
+  become: true
+  gather_facts: false
+
+  roles:
+    - buildkitd # buildkitd + buildctl 설치 + systemd 기동 + Harbor push 인증 파일
