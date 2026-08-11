@@ -7,4 +7,4 @@
   gather_facts: false
 
   roles:
-    - buildkitd # buildkitd + buildctl 설치 + systemd 기동 + Harbor push 인증 파일
+    - { role: buildkitd, tags: ['buildkitd'] } # buildkitd + buildctl 설치 + systemd 기동 + Harbor push 인증 파일

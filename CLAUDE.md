@@ -21,6 +21,7 @@ bin/start_kubernetes.sh <프로젝트 절대경로> all      # k8s_ansible.yml �
 bin/start_longhorn.sh <프로젝트 절대경로> all        # longhorn_ansible.yml — Longhorn 노드 사전 준비
 bin/start_terraform.sh <프로젝트 절대경로> all       # terraform_ansible.yml — Terraform 설치
 bin/start_helm.sh <프로젝트 절대경로> all            # helm_ansible.yml — Helm 설치 (300 부터의 Helm 차트 스택 배포용 CLI)
+bin/start_buildkitd.sh <프로젝트 절대경로> all       # buildkitd_ansible.yml — BuildKit(docker 없는 이미지 빌드/push 데몬) 설치
 bin/start_kafka.sh <프로젝트 절대경로> all           # kafka_ansible.yml — Kafka 설치 (KRaft 로컬 클러스터)
 
 # 1인자 스크립트 — <프로젝트 절대경로>만 전달
@@ -29,7 +30,6 @@ bin/start_postgresql.sh <프로젝트 절대경로>  # postgresql_ansible.yml �
 bin/start_minio.sh <프로젝트 절대경로>       # minio_ansible.yml — MinIO(SNSD) 설치
 bin/start_neo4j.sh <프로젝트 절대경로>       # neo4j_ansible.yml — Neo4j(Community Edition) 설치
 bin/start_local_git.sh <프로젝트 절대경로>   # local_git_ansible.yml — Airflow 코드 저장소 부트스트랩
-bin/start_buildkitd.sh <프로젝트 절대경로>   # buildkitd_ansible.yml — BuildKit(docker 없는 이미지 빌드/push 데몬) 설치
 
 # 또는 프로젝트 루트에서 직접 실행 (ansible.cfg가 inventory=host.yml을 지정하므로 -i 불필요)
 ansible-playbook ubuntu_ansible.yml
@@ -37,7 +37,7 @@ ansible-playbook ubuntu_ansible.yml --tags etc_hosts   # 롤 단독 재실행
 ```
 
 - **반드시 프로젝트 루트에서 실행**해야 한다 — ansible.cfg의 inventory/roles_path/callback_plugins가 상대 경로 기준이다. start_*.sh가 `cd`를 대신 해주는 이유가 이것이다.
-- ubuntu·k8s·kafka·longhorn·terraform·helm 플레이북은 **모든 롤 항목에 롤명과 동일한 태그**가 있어 TARGET 인자(또는 `--tags`)로 어떤 롤이든 단독 재실행할 수 있다. docker·postgresql·minio·neo4j·local_git 플레이북에는 태그가 없다(롤 1개짜리).
+- ubuntu·k8s·kafka·longhorn·terraform·helm·buildkitd 플레이북은 **모든 롤 항목에 롤명과 동일한 태그**가 있어 TARGET 인자(또는 `--tags`)로 어떤 롤이든 단독 재실행할 수 있다. docker·postgresql·minio·neo4j·local_git 플레이북에는 태그가 없다(롤 1개짜리).
 - 실행 출력 끝에는 커스텀 콜백 [callback_plugins/summary_table.py](callback_plugins/summary_table.py)(ansible.cfg `callback_plugins = ./callback_plugins`)가 PLAY RECAP 뒤 롤·태스크·호스트별 요약 표를 덧붙인다. aggregate 타입이라 stdout_callback(yaml)을 대체하지 않으며, assert 태스크는 PASS/FAIL로 표기한다.
 - 핀 버전 후보 확인: `apt-cache madison <패키지>` (저장소 등록 후)
 - k8s 롤에는 `ansible.posix`, `community.general` 컬렉션이 필요하다. collection_check 롤은 **검증만 하고 설치하지 않는다** — 없으면 `ansible-galaxy collection install`로 직접 설치.

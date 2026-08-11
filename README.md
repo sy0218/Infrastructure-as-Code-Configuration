@@ -394,7 +394,7 @@ sudo /my_project/Infrastructure-as-Code-Ansible/bin/ansible_setup.sh
 
 # BuildKit 설치 (buildkitd_ansible.yml) — docker 없는 이미지 빌드/push 데몬
 # ⚠ push 는 200-harbor apply 이후에나 가능하다 (설치 자체는 언제든 무방)
-/my_project/Infrastructure-as-Code-Ansible/bin/start_buildkitd.sh /my_project/Infrastructure-as-Code-Ansible
+/my_project/Infrastructure-as-Code-Ansible/bin/start_buildkitd.sh /my_project/Infrastructure-as-Code-Ansible all
 
 # Airflow 코드 저장소 부트스트랩 (local_git_ansible.yml)
 # ⚠ Terraform 303-git apply 뒤, 304-airflow apply 앞에서만 실행
