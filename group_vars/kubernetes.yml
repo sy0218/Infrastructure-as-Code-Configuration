@@ -31,7 +31,11 @@ kubernetes_admin_user: "root" # 마스터에서 kubectl 사용할 계정 (.kube/
 # → 변경 시 containerd 롤이 자동 재시작으로 반영
 # =======================================
 containerd_insecure_registries:
-  - "data-layer-harbor" # Harbor (TLS 미사용 → HTTP 접속 허용)
+  # :80 이 반드시 필요하다 — 점(.)도 콜론(:)도 없는 단일 라벨은 Docker 이미지 참조
+  # 파서가 레지스트리로 인정하지 않고 docker.io 밑의 경로로 정규화해 버린다
+  # (data-layer-harbor/x → docker.io/data-layer-harbor/x). NodePort 시절에는
+  # :30003 이 그 콜론 역할을 했고, Ingress(80) 전환으로 포트가 사라지며 깨졌다.
+  - "data-layer-harbor:80" # Harbor (TLS 미사용 → HTTP 접속 허용)
 
 # =======================================
 # 필수 Ansible 컬렉션 (collection_check 사용)

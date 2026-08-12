@@ -72,13 +72,18 @@ containerd 바이너리에 내장돼 실행 시 커널에 로드되므로, 패�
   changed_when: false
 
 # 5. SystemdCgroup 활성화 + certs.d 경로 지정해서 설정 파일 배포
-#    - 1.x: config_path 기본값이 빈 문자열 → 채워 넣어야 certs.d의 hosts.toml을 읽는다
-#    - 2.x(version=3): 기본값에 이미 certs.d가 들어 있고 TOML이 홑따옴표라 아래 replace는
-#      아무것도 매치하지 않는다(no-op). 그래서 검증은 따옴표에 의존하지 않는 정규식으로 한다.
+#    - 1.x: config_path 기본값이 빈 문자열(쌍따옴표) → 채워 넣어야 certs.d의 hosts.toml을 읽는다
+#    - 2.x(version=3): 기본값이 콜론 목록('/etc/containerd/certs.d:/etc/docker/certs.d')인데,
+#      기본 pull 경로(use_local_image_pull=false → transfer 플러그인)가 이 목록을 분리하지
+#      않고 통째로 한 디렉토리 경로로 취급한다 → certs.d를 못 찾아 HTTPS로 붙고
+#      "server gave HTTP response to HTTPS client"로 pull이 죽는다(2026-08-12 실측 —
+#      단일 경로로 바꾸면 즉시 정상). 네 번째 replace가 콜론 목록을 단일 경로로 줄인다.
+#      transfer 플러그인 자체의 config_path(빈 값, 홑따옴표)도 세 번째 replace로 채운다
+#      (CRI 를 거치지 않는 transfer API 직접 사용 경로 대비 — 결정적이었던 쪽은 콜론 제거다).
 #    (파이프+sed는 비멱등이라 금지 — copy는 내용이 같으면 changed=0 보장)
 - name: "Apply containerd config"
   copy:
-    content: "{{ containerd_default.stdout | replace('SystemdCgroup = false', 'SystemdCgroup = true') | replace('config_path = \"\"', 'config_path = \"/etc/containerd/certs.d\"') }}\n"
+    content: "{{ containerd_default.stdout | replace('SystemdCgroup = false', 'SystemdCgroup = true') | replace('config_path = \"\"', 'config_path = \"/etc/containerd/certs.d\"') | replace(\"config_path = ''\", \"config_path = '/etc/containerd/certs.d'\") | replace(\"config_path = '/etc/containerd/certs.d:/etc/docker/certs.d'\", \"config_path = '/etc/containerd/certs.d'\") }}\n"
     dest: /etc/containerd/config.toml
     owner: root
     group: root
@@ -183,10 +188,19 @@ containerd 바이너리에 내장돼 실행 시 커널에 로드되므로, 패�
 
 # 설정 파일에 certs.d 경로 반영 확인
 # 따옴표 종류(1.x 쌍따옴표 / 2.x 홑따옴표)와 콜론 목록 형태를 모두 받아들인다.
-# 빈 값(config_path = '')은 매치되지 않으므로 transfer 플러그인 쪽 오탐이 없다.
 - name: "Check certs.d config_path in config"
   command: grep -Ec "config_path = ['\"][^'\"]*/etc/containerd/certs\.d" /etc/containerd/config.toml
   register: config_path_check
+  failed_when: false
+  changed_when: false
+
+# 빈 config_path나 콜론 목록이 남지 않았는지 확인 — 2.x의 transfer 경유 pull은
+# 빈 값이면 certs.d를 무시하고, 콜론 목록이면 통째로 한 경로로 취급해 못 찾는다.
+# 어느 쪽이든 증상은 같다("HTTP response to HTTPS client"). certs.d 경로 매치만 세는
+# 위 검증은 이 두 구멍을 못 잡는 전례가 있어(2026-08-12) 별도로 확인한다.
+- name: "Check no empty or colon-list config_path remains"
+  command: grep -Ec "config_path = (''|\"\"|['\"][^'\"]*:[^'\"]*['\"])" /etc/containerd/config.toml
+  register: empty_config_path_check
   failed_when: false
   changed_when: false
 
@@ -208,9 +222,10 @@ containerd 바이너리에 내장돼 실행 시 커널에 로드되므로, 패�
       - '"runc" in held_packages.stdout_lines'
       - systemd_cgroup_check.stdout | int >= 1
       - config_path_check.stdout | int >= 1
+      - empty_config_path_check.stdout | int == 0 # 빈 값/콜론 목록이 남으면 pull이 certs.d를 못 쓴다
       - containerd_version.split("-")[0] in containerd_daemon_version.stdout # 데몬이 옛 바이너리로 남아 있으면 실패
     success_msg: "Good!.. | containerd {{ containerd_pkg_version.stdout }} + runc {{ runc_pkg_version.stdout }} active & held (SystemdCgroup = true, certs.d enabled)"
-    fail_msg: "ERROR!.. | containerd/runc 버전 불일치·hold 누락, 서비스 비활성, SystemdCgroup/certs.d 미반영, 또는 데몬이 옛 바이너리"
+    fail_msg: "ERROR!.. | containerd/runc 버전 불일치·hold 누락, 서비스 비활성, SystemdCgroup/certs.d 미반영(빈 config_path 잔존 포함), 또는 데몬이 옛 바이너리"
 
 - name: "Assert insecure registry hosts.toml applied"
   assert:
@@ -235,6 +250,12 @@ containerd 바이너리에 내장돼 실행 시 커널에 로드되므로, 패�
 - `containerd config default` 출력을 `register`로 받아(`changed_when: false`)
 `replace` 필터로 `SystemdCgroup = true` 치환 후 `copy`로 배포
 - `config_path = "/etc/containerd/certs.d"`도 함께 치환 — 지정 없이는 hosts.toml을 읽지 않음
+- ⚠ **2.x는 치환이 두 곳이다** — ① CRI 쪽 기본값은 **콜론 목록**
+(`certs.d:/etc/docker/certs.d`)인데, 기본 pull 경로(transfer 플러그인,
+`use_local_image_pull=false`)가 목록을 분리하지 않고 통째로 한 경로로 취급해 certs.d를
+못 찾는다 → 단일 경로로 줄인다(**이쪽이 결정적** — 2026-08-12 실측). ② transfer 플러그인
+자체의 `config_path`는 빈 값(홑따옴표)이라 함께 채운다. 어느 쪽이든 놓치면 HTTPS로 붙어
+`server gave HTTP response to HTTPS client`로 pull이 죽는다
 - 파이프+sed 방식은 비멱등이라 금지 — copy는 내용 동일 시 **changed=0** 보장
 ---
 ### 3️⃣ HTTP 사설 레지스트리 허용 — certs.d/hosts.toml
@@ -249,6 +270,8 @@ containerd 바이너리에 내장돼 실행 시 커널에 로드되므로, 패�
 ### 5️⃣ 검증
 - 서비스 active + **설치 버전 = 고정 버전** + hold 상태 + `SystemdCgroup = true`
 + certs.d `config_path` + 레지스트리별 hosts.toml 존재를 `assert`로 검증
+- **빈 값/콜론 목록 `config_path`가 0개**인 것도 함께 검증 — certs.d 경로 매치만 세면
+빈 값도 콜론 목록도 통과하는 구멍이 있다(위 2️⃣의 실측 사례)
 ---
 <br>
 
