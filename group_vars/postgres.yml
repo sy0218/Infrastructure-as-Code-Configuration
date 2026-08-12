@@ -1,7 +1,14 @@
 #########################################
+# ⚠ 퇴역 경로 (2026-08) — PostgreSQL 은 CloudNativePG 로 K8s 에 복귀했다.
+#   승계자: Terraform 103-cnpg(오퍼레이터) + 303-postgres(Cluster 3인스턴스).
+#   DDL·계정·서버 파라미터의 단일 원본도 303 의 Cluster 스펙으로 옮겨갔다.
+#   이 파일과 postgresql_ansible.yml 은 새 배포에서 실행하지 않는다 —
+#   구 인스턴스(ap 의 systemd)는 롤백 대비로 중지 상태로만 보존한다.
+#########################################
 # PostgreSQL 설치 버전 고정 (postgres 사용)
-# → ADR 0(Kafka)의 판단을 데이터 스토어에도 적용 — K8s 가 아니라 로컬(systemd).
+# → (구 결정) ADR 0(Kafka)의 판단을 데이터 스토어에도 적용 — K8s 가 아니라 로컬(systemd).
 #   단일 인스턴스라 재스케줄 이득이 없고, 로컬 디스크 I/O 가 곧 성능이다.
+#   → CNPG 3인스턴스 전환으로 '단일 인스턴스' 전제가 사라지며 이 결정은 뒤집혔다.
 # → 사용 가능 버전 확인: apt-cache madison postgresql-16
 # → TimescaleDB 는 packagecloud 저장소 — 확장과 loader 가 세트로 같은 버전이어야 한다.
 #   목록 확인: https://packagecloud.io/timescale/timescaledb/ubuntu/dists/noble/main/binary-amd64/Packages

@@ -20,8 +20,7 @@
 #         클라이언트가 TCP 타임아웃 뒤 다음 IP 로 넘어간다. 즉 전환 주체가 클라이언트다.
 #         (glibc 가 여러 주소를 모두 반환하려면 /etc/host.conf 에 'multi on' 이 있어야 한다.
 #          Ubuntu 기본값이라 따로 설정하지 않지만, 꺼지면 첫 줄 하나만 반환되어 전환이 죽는다.)
-#         git 은 인그레스에 태울 수 없어서(git 프로토콜에 Host 헤더가 없다),
-#         minio-console·neo4j 는 K8s 밖 서비스라서 여기 남는다(근거는 host.yml 주석).
+#         minio-console·neo4j 는 K8s 밖(ap 노드 systemd) 서비스라서 여기 남는다.
 #
 #      ② data_layer_vip_dns_names (VIP 계열) — 총 1줄이다.
 #         이름 전부가 인그레스 VIP 를 가리키고, 노드가 죽으면 MetalLB 가 VIP 를
@@ -162,16 +161,15 @@
 되지 않는다**. `.local` 을 뗀 이유는 mDNS 전용 예약 도메인(RFC 6762)이라
 systemd-resolved/Avahi 가 질의를 가로챌 수 있어서다.
 
-#### ① 노드 IP 계열 — `data_layer_dns_names` (이름 3개 × 노드 수 = 3줄)
+#### ① 노드 IP 계열 — `data_layer_dns_names` (이름 2개 × 노드 수 = 3줄)
 - 이름 하나가 **노드 IP 전부**를 A 레코드로 갖는다 (`<노드IP> 이름1 이름2 ...`)
 - **장애 전환 주체는 클라이언트다** — 죽은 IP 로 먼저 붙으면 TCP 타임아웃을 기다린 뒤
   다음 IP 로 넘어간다. glibc 가 여러 주소를 반환하려면 `/etc/host.conf` 에
   `multi on`(Ubuntu 기본값)이 있어야 한다
-- 여기 남은 이유는 이름마다 다르다
-  | 이름 | 이유 |
-  |---|---|
-  | `data-layer-git` | `git://` 는 HTTP 가 아니라 **Host 헤더가 없다**(L7 라우팅 불가) |
-  | `data-layer-minio-console` · `data-layer-neo4j` | K8s 밖 `ap` 노드의 systemd 서비스라 Service 객체가 없다 |
+- 여기 남은 이유: `data-layer-minio-console` · `data-layer-neo4j` 는 K8s 밖 `ap` 노드의
+  systemd 서비스라 Service 객체가 없다
+  (`data-layer-git` 은 303-git 퇴역과 함께 삭제됐다. K8s 로 복귀한 postgres 의 외부 접속은
+  hosts 이름 없이 전용 VIP — Terraform 102-ingress `postgres_vip`:5432 — 로 한다)
 
 #### ② VIP 계열 — `data_layer_vip_dns_names` (이름 6개, 총 1줄)
 - 이름 전부가 **인그레스 VIP 하나**(`ingress_vip`)를 가리킨다
@@ -204,7 +202,7 @@ ok: [192.168.56.200] => (item=...) => {
 
 TASK [Assert /etc/hosts data-layer DNS name occurrence count]
 ok: [192.168.56.200] => {
-    "msg": "Good!.. | data-layer DNS name occurrences: 9 (names: 3 x nodes: 3)"
+    "msg": "Good!.. | data-layer DNS name occurrences: 6 (names: 2 x nodes: 3)"
 }
 
 TASK [Assert /etc/hosts ingress VIP DNS name occurrence count]

@@ -14,8 +14,9 @@ root_password: "1234"
 # data-layer 외부 접속용 DNS 이름 목록 (etc_hosts 사용)
 # =======================================
 # 1. 노드 IP 계열 → 이름 하나가 노드 IP 전부를 A 레코드로 갖는다(노드당 1줄).
+#    (data-layer-git 은 303-git 퇴역과 함께 삭제됐다 — postgres 외부 접속은 이름 없이
+#     전용 VIP(Terraform 102-ingress 의 postgres_vip):5432 로 붙는다)
 data_layer_dns_names:
-  - data-layer-git
   - data-layer-minio-console
   - data-layer-neo4j
 

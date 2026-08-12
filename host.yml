@@ -29,10 +29,6 @@ all:
         s1:
         s2:
 
-    local_git:
-      hosts:
-        s2: # data_pipeline 소스 트리가 있는 유일한 노드
-
     terraform:
       hosts:
         s2:

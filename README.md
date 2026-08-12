@@ -300,7 +300,6 @@ Infrastructure-as-Code-Ansible/
 │   ├── Ubuntu_Servers.yml
 │   ├── kubernetes.yml
 │   ├── longhorn.yml
-│   ├── local_git.yml
 │   ├── terraform.yml
 │   ├── helm.yml
 │   ├── docker.yml
@@ -312,12 +311,11 @@ Infrastructure-as-Code-Ansible/
 ├── ubuntu_ansible.yml     # 운영 서버 Configuration 플레이북
 ├── k8s_ansible.yml        # K8s 클러스터 구성 플레이북
 ├── longhorn_ansible.yml   # Longhorn 사전 준비 플레이북
-├── local_git_ansible.yml  # Airflow Git 저장소 부트스트랩 플레이북
 ├── terraform_ansible.yml  # Terraform 설치 플레이북
 ├── helm_ansible.yml       # Helm 설치 플레이북
 ├── docker_ansible.yml     # Docker 설치 플레이북
 ├── kafka_ansible.yml      # Kafka(KRaft) 설치 플레이북
-├── postgresql_ansible.yml # PostgreSQL(TimescaleDB) 설치 플레이북
+├── postgresql_ansible.yml # PostgreSQL(TimescaleDB) 설치 플레이북 (퇴역 — 303-postgres 가 승계)
 ├── minio_ansible.yml      # MinIO(SNSD) 설치 플레이북
 ├── neo4j_ansible.yml      # Neo4j 설치 플레이북
 ├── buildkitd_ansible.yml  # BuildKit(빌드 데몬) 설치 플레이북
@@ -326,7 +324,6 @@ Infrastructure-as-Code-Ansible/
 │   ├── start_ansible.sh       # 운영 서버 Configuration 실행
 │   ├── start_kubernetes.sh    # Kubernetes 구성 실행
 │   ├── start_longhorn.sh      # Longhorn 사전 준비 실행
-│   ├── start_local_git.sh     # Git 저장소 부트스트랩 실행
 │   ├── start_terraform.sh     # Terraform 설치 실행
 │   ├── start_helm.sh          # Helm 설치 실행
 │   ├── start_docker.sh        # Docker 설치 실행
@@ -384,6 +381,8 @@ sudo /my_project/Infrastructure-as-Code-Ansible/bin/ansible_setup.sh
 /my_project/Infrastructure-as-Code-Ansible/bin/start_kafka.sh /my_project/Infrastructure-as-Code-Ansible all
 
 # PostgreSQL 설치 (postgresql_ansible.yml)
+# ⚠ 퇴역 경로 — Terraform 303-postgres(CloudNativePG)가 승계했다. 새 배포에서는 실행하지
+#   않으며, 구 인스턴스(ap 의 systemd)는 롤백 대비로 중지 상태로만 보존한다.
 /my_project/Infrastructure-as-Code-Ansible/bin/start_postgresql.sh /my_project/Infrastructure-as-Code-Ansible all
 
 # MinIO 설치 (minio_ansible.yml)
@@ -395,10 +394,6 @@ sudo /my_project/Infrastructure-as-Code-Ansible/bin/ansible_setup.sh
 # BuildKit 설치 (buildkitd_ansible.yml) — docker 없는 이미지 빌드/push 데몬
 # ⚠ push 는 200-harbor apply 이후에나 가능하다 (설치 자체는 언제든 무방)
 /my_project/Infrastructure-as-Code-Ansible/bin/start_buildkitd.sh /my_project/Infrastructure-as-Code-Ansible all
-
-# Airflow 코드 저장소 부트스트랩 (local_git_ansible.yml)
-# ⚠ Terraform 303-git apply 뒤, 304-airflow apply 앞에서만 실행
-/my_project/Infrastructure-as-Code-Ansible/bin/start_local_git.sh /my_project/Infrastructure-as-Code-Ansible all
 ```
 > ⚠️ **반드시 Ansible 프로젝트의 절대 경로와 태그를 인자로 전달해서 실행하세요.**
 
@@ -641,7 +636,7 @@ class CallbackModule(CallbackBase):
 | `kubernetes` (`kubernetes_master`=ap / `kubernetes_workers`=s1, s2) | ap / s1 / s2 | k8s |
 | `longhorn` / `docker` / `kafka` | ap / s1 / s2 | longhorn / docker / kafka |
 | `postgres` / `minio` / `neo4j` | ap | postgresql / minio / neo4j |
-| `terraform` / `helm` / `local_git` | s2 | terraform / helm / local_git |
+| `terraform` / `helm` / `buildkitd` | s2 | terraform / helm / buildkitd |
 
 ---
 </br>
@@ -712,18 +707,6 @@ class CallbackModule(CallbackBase):
 ---
 </br>
 
-
-## 📜 코드 저장소 플레이북 (local_git_ansible.yml)
-> **Airflow 코드(`data_layer_airflow`)를 담는 **클라이언트 쪽 git 저장소**를 한 번 만들어 주는 플레이북입니다.**
-- **Play 1** → `local_git` 그룹(s2)에 `git init` → `.gitignore` → origin → 최초 커밋 → 최초 push
-- ⚠️ **실행 시점이 다른 플레이북과 다르다** → 노드 준비 단계가 아니라 Terraform **`303-git` apply 뒤, `304-airflow` apply 앞**이다. push 대상이 클러스터 안 파드라서, 저장소가 비어 있으면 airflow 파드의 git-sync 가 init 에서 멈춘다.
-- ⚠️ **부트스트랩 전용이다** → 커밋이 하나라도 있으면 최초 커밋/push 를 건너뛴다. 매 실행마다 작업 중이던 변경분을 임의 메시지로 커밋해 이력을 오염시키지 않기 위함이다.
-- ⚠️ **`airflow.env`·`scripts/airflow.conf` 는 `.gitignore` 고정 대상** → 저장소는 클러스터 안에서 인증 없이 clone 되므로(`git daemon --export-all`) 비밀번호·fernet 키가 그대로 노출된다. 런타임 값은 Secret `airflow-env` 에서 온다.
-- ⚠️ 선행 조건: `303-git` 파드 Running + `etc_hosts` 롤 적용(`data-layer-git` 이름 해석). 둘 중 하나라도 없으면 첫 태스크에서 원인을 알려주며 멈춘다.
-- 이후 수정은 사람이 한다: `git add -A && git commit && git push` → 약 10초 뒤 파드에 반영
-
----
-</br>
 
 ## 📋 Ansible Role `tasks/main.yml` 작성 규칙
 
@@ -945,6 +928,4 @@ fail_msg: "[FAIL] sshpass install failed"
 ---
 
 
-### 🔹 local_git → [`📂 local_git.md`](./roles/local_git/tasks/local_git.md)
-- Airflow 코드 저장소 부트스트랩  `git init -b master` + `.gitignore`(비밀값 제외) + origin 설정 + 최초 커밋/push. 서버 쪽 bare 저장소는 Terraform `303-git` 이 만들고 이 롤은 클라이언트만 준비한다. 커밋이 있으면 아무것도 하지 않는다 (인벤토리 `local_git_repo_dir`, `local_git_remote_url`, `local_git_branch`, `local_git_ignore` 등 기준)
 ---
