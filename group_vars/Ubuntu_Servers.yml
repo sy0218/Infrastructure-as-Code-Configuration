@@ -1,7 +1,7 @@
 # =======================================
 # Ansible 접속/권한 (모든 플레이 공통)
 # =======================================
-ansible_user: jsy_project
+ansible_user: project
 ansible_ssh_pass: "1234"
 ansible_become_password: "1234"
 
