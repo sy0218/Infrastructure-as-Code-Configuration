@@ -20,7 +20,8 @@
 #         클라이언트가 TCP 타임아웃 뒤 다음 IP 로 넘어간다. 즉 전환 주체가 클라이언트다.
 #         (glibc 가 여러 주소를 모두 반환하려면 /etc/host.conf 에 'multi on' 이 있어야 한다.
 #          Ubuntu 기본값이라 따로 설정하지 않지만, 꺼지면 첫 줄 하나만 반환되어 전환이 죽는다.)
-#         minio-console·neo4j 는 K8s 밖(ap 노드 systemd) 서비스라서 여기 남는다.
+#         minio-console(304-minio 가 hostNetwork 로 각 노드 :9001 에 직접 연다)·
+#         neo4j(노드 로컬 systemd)는 인그레스를 안 끼는 노드 포트 직결이라 여기 남는다.
 #
 #      ② data_layer_vip_dns_names (VIP 계열) — 총 1줄이다.
 #         이름 전부가 인그레스 VIP 를 가리키고, 노드가 죽으면 MetalLB 가 VIP 를
@@ -166,17 +167,18 @@ systemd-resolved/Avahi 가 질의를 가로챌 수 있어서다.
 - **장애 전환 주체는 클라이언트다** — 죽은 IP 로 먼저 붙으면 TCP 타임아웃을 기다린 뒤
   다음 IP 로 넘어간다. glibc 가 여러 주소를 반환하려면 `/etc/host.conf` 에
   `multi on`(Ubuntu 기본값)이 있어야 한다
-- 여기 남은 이유: `data-layer-minio-console` · `data-layer-neo4j` 는 K8s 밖 `ap` 노드의
-  systemd 서비스라 Service 객체가 없다
+- 여기 남은 이유: `data-layer-minio-console` 은 304-minio(K8s) 서버가 hostNetwork 로
+  각 노드 :9001 에 직접 여는 포트라 인그레스를 끼우지 않고(끼우면 접속 경로가 둘로 갈라진다),
+  `data-layer-neo4j` 는 K8s 밖 `ap` 노드의 systemd 서비스라 Service 객체가 없다
   (`data-layer-git` 은 303-git 퇴역과 함께 삭제됐다. K8s 로 복귀한 postgres 의 외부 접속은
   hosts 이름 없이 전용 VIP — Terraform 102-ingress `postgres_vip`:5432 — 로 한다)
 
-#### ② VIP 계열 — `data_layer_vip_dns_names` (이름 6개, 총 1줄)
+#### ② VIP 계열 — `data_layer_vip_dns_names` (이름 7개, 총 1줄)
 - 이름 전부가 **인그레스 VIP 하나**(`ingress_vip`)를 가리킨다
 - **장애 전환 주체는 MetalLB 다** — 노드가 죽으면 VIP 가 살아 있는 노드로 옮겨가므로
   클라이언트는 타임아웃을 기다릴 일이 없고 주소도 그대로다
 - 이름별 구분은 hosts 가 아니라 **인그레스가 Host 헤더로** 한다
-- 대상: `harbor` · `kafka-ui` · `airflow` · `api` · `grafana` · `prometheus`
+- 대상: `harbor` · `kafka-ui` · `airflow` · `api` · `grafana` · `prometheus` · `headlamp`
 - ⚠ `harbor` 는 특별하다 — 사람이 치는 주소일 뿐 아니라 **이미지 이름의 첫 마디**라서
   `containerd_insecure_registries` · Terraform 전 스택 `harbor_registry` 와 글자 그대로 같아야 한다
 

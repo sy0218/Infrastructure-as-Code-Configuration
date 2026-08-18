@@ -1,0 +1,82 @@
+# -----------------------------------------------------
+# MinIO 드라이브 선행작업 → 루프 이미지 2장 생성/포맷/마운트
+# -----------------------------------------------------
+# 서버는 K8s(Terraform 저장소 304-minio, Helm)로 이관됐다 — 이 롤은 그 차트가
+# 전제하는 노드 드라이브만 준비한다(longhorn_prereq 의 /data/longhorn 과 같은
+# 성격의, 도구가 모델링 못 하는 수동 단계).
+#
+# [구조] 파일 하나를 리눅스가 디스크로 취급하게 만든다(근거 전문은 group_vars/minio.yml)
+#   /var/lib/minio-drives/diskN.img ──리눅스──→ /dev/loopN ──마운트──→ /data/minio/diskN
+#
+# [주의] 구 minio 롤과 달리 마운트 지점의 소유자를 바꾸지 않는다 — 304-minio
+#   파드는 root 로 뜬다(구 systemd 는 비루트 minio 계정이라 chown 이 필요했다).
+#
+# 멱등이라 재실행이 안전하다 — 마운트가 살아 있으면 아무것도 바꾸지 않는다.
+# 필요 컬렉션: community.general(filesystem) · ansible.posix(mount)
+# -----------------------------------------------------
+
+# =========================================================================
+# 1. 디렉토리 생성 (file 모듈 자체가 멱등)
+# =========================================================================
+- name: "Create minio drive directories"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ minio_data_dir }}" # 드라이브 마운트 지점의 부모
+    - "{{ minio_image_dir }}" # 드라이브 실체(루프 이미지 파일)
+
+# =========================================================================
+# 2. 드라이브 준비 — 파일 하나를 디스크로 만들어 마운트한다
+# =========================================================================
+
+# creates 로 멱등 — 이미 있으면 건드리지 않는다(있는 이미지를 다시 만들면 데이터가 날아간다)
+- name: "Create minio drive images"
+  command: "truncate -s {{ minio_drive_size }} {{ minio_image_dir }}/{{ item }}.img"
+  args:
+    creates: "{{ minio_image_dir }}/{{ item }}.img"
+  loop: "{{ minio_drives }}"
+
+# filesystem 모듈은 이미 포맷돼 있으면 건너뛴다(force 를 주지 않는 한 덮어쓰지 않는다)
+- name: "Format minio drive images"
+  community.general.filesystem:
+    fstype: "{{ minio_drive_fstype }}"
+    dev: "{{ minio_image_dir }}/{{ item }}.img"
+  loop: "{{ minio_drives }}"
+
+# state: mounted → 지금 마운트하고 /etc/fstab 에도 등록한다(재부팅 후에도 유지).
+# ⚠ fstab 등록이 빠지면 재부팅 시 마운트가 풀리는데, 그 자리(루트 디스크의 빈 폴더)로
+#   기동하는 사고는 304-minio 의 check-drives initContainer 가 막는다(RequiresMountsFor 승계).
+- name: "Mount minio drives"
+  ansible.posix.mount:
+    path: "{{ minio_data_dir }}/{{ item }}"
+    src: "{{ minio_image_dir }}/{{ item }}.img"
+    fstype: "{{ minio_drive_fstype }}"
+    opts: loop
+    state: mounted
+  loop: "{{ minio_drives }}"
+
+# -----------------------------------------------------
+# 검증
+# -----------------------------------------------------
+# 드라이브가 진짜 마운트돼 있는지 — 값이 비면 루트 디스크의 빈 폴더를 보고 있다는 뜻이다
+# (fstab 등록이 빠졌거나 재부팅 후 마운트가 풀린 경우).
+- name: "Check minio drives are mounted"
+  command: "findmnt -no SOURCE {{ minio_data_dir }}/{{ item }}"
+  loop: "{{ minio_drives }}"
+  register: minio_mounts
+  changed_when: false
+  failed_when: false
+
+- name: "Assert minio drives are mounted filesystems"
+  assert:
+    that:
+      - item.stdout | trim != ""
+    success_msg: "Good!.. | drive mounted: {{ item.item }} ← {{ item.stdout | trim }}"
+    fail_msg: "ERROR!.. | drive NOT mounted: {{ item.item }} → 304-minio 파드가 기동하지 못한다 (mount -a 후 재확인)"
+  loop: "{{ minio_mounts.results }}"
+  loop_control:
+    label: "{{ item.item }}"

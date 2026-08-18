@@ -15,12 +15,12 @@ run_cmd() {
     eval "$1"
 }
 
-log "===== START postgresql ansible start ====="
+log "===== START kafka_prereq ansible start ====="
 
 log "ANSIBLE_HOME: ${ANSIBLE_HOME}"
 
 # ansible.cfg(inventory, remote_tmp 등) 적용을 위해 프로젝트 루트로 이동
 run_cmd "cd ${ANSIBLE_HOME}"
-run_cmd "ansible-playbook postgresql_ansible.yml"
+run_cmd "ansible-playbook kafka_prereq_ansible.yml"
 
-log "===== END postgresql ansible end ====="
+log "===== END kafka_prereq ansible end ====="

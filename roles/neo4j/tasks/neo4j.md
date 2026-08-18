@@ -1,7 +1,7 @@
 # 🕸 Neo4j 설치 (Community Edition · 로컬 systemd)
 
 - ADR 0(Kafka)와 같은 판단 — **K8s 가 아니라 서버 로컬(systemd)**. compose 의 `data_layer-graph` 서비스(`neo4j:5-community` 이미지)를 이 롤이 대체한다.
-- Terraform `300-data-layer-base` 의 `neo4j_bolt_uri`(`bolt://192.168.56.200:7687`)가 여기서 연 주소를 가리키고, `307-pipeline` 의 `cdm-consumer-graph` 가 그 주소로 붙어 MERGE 로 적재한다.
+- Terraform `300-data-layer-base` 의 `neo4j_bolt_uri`(`bolt://192.168.56.200:7687`)가 여기서 연 주소를 가리키고, `308-pipeline` 의 `cdm-consumer-graph` 가 그 주소로 붙어 MERGE 로 적재한다.
   | 포트 | 용도 | 계약 지점 |
   |---|---|---|
   | `7687` | Bolt — neo4j 파이썬 드라이버 접속 | `300` 의 `neo4j_bolt_uri` → `PLATFORM_NEO4J_URI` |

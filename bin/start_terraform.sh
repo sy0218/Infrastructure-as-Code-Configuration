@@ -2,7 +2,7 @@
 
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <ANSIBLE_HOME> <TARGET>"
-    echo "TARGET: all | longhorn_prereq"
+    echo "TARGET: all | terraform"
     exit 1
 fi
 

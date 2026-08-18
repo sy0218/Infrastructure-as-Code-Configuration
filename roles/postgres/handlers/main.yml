@@ -1,9 +1,0 @@
-# -----------------------------------------------------
-# postgresql 재시작 핸들러 → conf.d 드롭인 / pg_hba 변경 시에만 실행
-# -----------------------------------------------------
-# shared_preload_libraries 는 reload 로 반영되지 않는다 → restart 여야 한다.
-- name: restart postgresql
-  systemd:
-    name: "postgresql@{{ postgres_version }}-main"
-    state: restarted
-    daemon_reload: true

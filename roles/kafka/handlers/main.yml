@@ -1,8 +1,0 @@
-# -----------------------------------------------------
-# kafka 재시작 핸들러 → server.properties / systemd 유닛 변경 시에만 실행
-# -----------------------------------------------------
-- name: restart kafka
-  systemd:
-    name: kafka
-    state: restarted
-    daemon_reload: true # 유닛 파일 변경분 반영

@@ -3,7 +3,7 @@
 # =====================================================
 # ADR 0 (Kafka)의 판단을 데이터 스토어에도 적용한다 — K8s 가 아니라 서버 로컬(systemd).
 # Terraform 300-data-layer-base 의 neo4j_bolt_uri 가 여기서 설치한 주소를 가리키며,
-# 307-pipeline 의 cdm-consumer-graph 가 그 주소로 붙어 MERGE 로 적재한다.
+# 308-pipeline 의 cdm-consumer-graph 가 그 주소로 붙어 MERGE 로 적재한다.
 #
 # ⚠ 계정·비밀번호가 곧 계약이다 — neo4j_user / neo4j_password 는 Terraform 300 의
 #   secrets.auto.tfvars(platform_neo4j_user / platform_neo4j_password)와

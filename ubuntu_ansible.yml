@@ -21,7 +21,6 @@
   roles:
     - { role: root_password,         tags: ['root_password'] }
     - { role: packages,              tags: ['packages'] }
-    - { role: pip_packages,          tags: ['pip_packages'] }
     - { role: nicname,               tags: ['nicname'] }
     - { role: cloud_init,            tags: ['cloud_init'] }
     - { role: ufw,                   tags: ['ufw'] }

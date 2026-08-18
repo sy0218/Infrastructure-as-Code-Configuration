@@ -303,7 +303,6 @@ Infrastructure-as-Code-Ansible/
 │   ├── terraform.yml
 │   ├── helm.yml
 │   ├── docker.yml
-│   ├── kafka.yml
 │   ├── postgres.yml
 │   ├── minio.yml
 │   ├── neo4j.yml
@@ -313,10 +312,10 @@ Infrastructure-as-Code-Ansible/
 ├── longhorn_ansible.yml   # Longhorn 사전 준비 플레이북
 ├── terraform_ansible.yml  # Terraform 설치 플레이북
 ├── helm_ansible.yml       # Helm 설치 플레이북
-├── docker_ansible.yml     # Docker 설치 플레이북
-├── kafka_ansible.yml      # Kafka(KRaft) 설치 플레이북
-├── postgresql_ansible.yml # PostgreSQL(TimescaleDB) 설치 플레이북 (퇴역 — 303-postgres 가 승계)
-├── minio_ansible.yml      # MinIO(SNSD) 설치 플레이북
+├── kafka_prereq_ansible.yml # Strimzi 로컬 PV 디렉토리 선행작업 플레이북
+├── kafka_remove_ansible.yml # 구 로컬(systemd) Kafka 제거 플레이북 (브로커는 301-kafka 가 승계)
+├── minio_remove_ansible.yml # 구 로컬(systemd) MinIO 제거 플레이북 (서버는 304-minio 가 승계)
+├── minio_ansible.yml      # MinIO 드라이브 선행작업 플레이북 (서버는 304-minio — minio_prereq 롤)
 ├── neo4j_ansible.yml      # Neo4j 설치 플레이북
 ├── buildkitd_ansible.yml  # BuildKit(빌드 데몬) 설치 플레이북
 ├── bin/
@@ -327,15 +326,16 @@ Infrastructure-as-Code-Ansible/
 │   ├── start_terraform.sh     # Terraform 설치 실행
 │   ├── start_helm.sh          # Helm 설치 실행
 │   ├── start_docker.sh        # Docker 설치 실행
-│   ├── start_kafka.sh         # Kafka 설치 실행
+│   ├── remove_kafka.sh        # 구 로컬 Kafka 제거 실행 (K8s 301-kafka 컷오버 선행)
+│   ├── remove_minio.sh        # 구 로컬 MinIO 제거 실행 (K8s 304-minio 컷오버 선행)
 │   ├── start_postgresql.sh    # PostgreSQL 설치 실행
-│   ├── start_minio.sh         # MinIO 설치 실행
+│   ├── start_minio.sh         # MinIO 드라이브 선행작업 실행
 │   ├── start_neo4j.sh         # Neo4j 설치 실행
 │   └── start_buildkitd.sh     # BuildKit 설치 실행
 ├── COMMIT_CONVENTION.md  # Git 커밋 규칙
 ├── callback_plugins/
 │   └── summary_table.py  # 실행 결과 요약 표 callback 플러그인
-└── roles/                # 기능별 Ansible Role (39종)
+└── roles/                # 기능별 Ansible Role (37종)
     ├── control/
     ├── packages/
     ├── java/
@@ -374,18 +374,19 @@ sudo /my_project/Infrastructure-as-Code-Ansible/bin/ansible_setup.sh
 # Helm 설치 (helm_ansible.yml)
 /my_project/Infrastructure-as-Code-Ansible/bin/start_helm.sh /my_project/Infrastructure-as-Code-Ansible all
 
-# Docker 설치 (docker_ansible.yml)
-/my_project/Infrastructure-as-Code-Ansible/bin/start_docker.sh /my_project/Infrastructure-as-Code-Ansible all
+# 구 로컬 Kafka 제거 (kafka_remove_ansible.yml)
+# ⚠ 브로커는 Terraform 저장소 301-kafka(Helm)로 이관됐다. 이 스크립트는 컷오버 선행
+#   단계로 구 systemd 설치를 데이터까지 걷어낸다 — 301-kafka helm install 전에 실행.
+/my_project/Infrastructure-as-Code-Ansible/bin/remove_kafka.sh /my_project/Infrastructure-as-Code-Ansible
 
-# Kafka 설치 (kafka_ansible.yml)
-/my_project/Infrastructure-as-Code-Ansible/bin/start_kafka.sh /my_project/Infrastructure-as-Code-Ansible all
+# 구 로컬 MinIO 제거 (minio_remove_ansible.yml)
+# ⚠ 서버는 Terraform 저장소 304-minio(Helm)로 이관됐다. 이 스크립트는 컷오버 선행 단계로
+#   구 systemd 설치를 드라이브 내용물까지 걷어낸다 — 304-minio helm install 전에 실행.
+/my_project/Infrastructure-as-Code-Ansible/bin/remove_minio.sh /my_project/Infrastructure-as-Code-Ansible
 
-# PostgreSQL 설치 (postgresql_ansible.yml)
-# ⚠ 퇴역 경로 — Terraform 303-postgres(CloudNativePG)가 승계했다. 새 배포에서는 실행하지
-#   않으며, 구 인스턴스(ap 의 systemd)는 롤백 대비로 중지 상태로만 보존한다.
-/my_project/Infrastructure-as-Code-Ansible/bin/start_postgresql.sh /my_project/Infrastructure-as-Code-Ansible all
-
-# MinIO 설치 (minio_ansible.yml)
+# MinIO 드라이브 선행작업 (minio_ansible.yml — minio_prereq 롤)
+# 루프 이미지 2장 생성/포맷/마운트. 서버는 304-minio 가 소유하고, 이 플레이는 그 차트가
+# 전제하는 드라이브만 준비한다(멱등 — longhorn_prereq 와 같은 성격).
 /my_project/Infrastructure-as-Code-Ansible/bin/start_minio.sh /my_project/Infrastructure-as-Code-Ansible all
 
 # Neo4j 설치 (neo4j_ansible.yml)
@@ -625,7 +626,7 @@ class CallbackModule(CallbackBase):
 
 - **롤에는 `defaults/`, `vars/`가 없어 모든 변수가 `group_vars/`에 모여 있습니다.**
 - **그룹 = 플레이북 단위** → 그룹에 서버를 추가/제거하는 것만으로 대상 확장
-- `host.yml`에는 구조와 호스트 고유값(`ansible_host`, `kafka_node_id`)만 둡니다
+- `host.yml`에는 구조와 호스트 고유값(`ansible_host`)만 둡니다
 - 접속 계정, sudo 비밀번호, 설치 패키지 목록, 버전 핀, 포트, 계정, 버킷 이름 등은 해당 그룹의 `group_vars/` 파일에서 관리
 - `group_vars/`는 인벤토리와 같은 디렉토리에 있어 **자동으로 로드**됩니다
   - **`[주의]` 파일명은 그룹명과 대소문자까지 같아야 합니다**(`Ubuntu_Servers.yml`)
@@ -634,8 +635,8 @@ class CallbackModule(CallbackBase):
 |------|------|----------------|
 | `Ubuntu_Servers` | ap / s1 / s2 | ubuntu |
 | `kubernetes` (`kubernetes_master`=ap / `kubernetes_workers`=s1, s2) | ap / s1 / s2 | k8s |
-| `longhorn` / `docker` / `kafka` | ap / s1 / s2 | longhorn / docker / kafka |
-| `postgres` / `minio` / `neo4j` | ap | postgresql / minio / neo4j |
+| `longhorn` / `docker` / `minio` | ap / s1 / s2 | longhorn / docker / minio |
+| `postgres` / `neo4j` | ap | postgresql / neo4j |
 | `terraform` / `helm` / `buildkitd` | s2 | terraform / helm / buildkitd |
 
 ---
@@ -689,20 +690,34 @@ class CallbackModule(CallbackBase):
 ---
 </br>
 
-## 📜 Docker 플레이북 (docker_ansible.yml)
-> **Docker(docker.io + compose 플러그인) 설치 플레이북입니다.**
-- **Play 1** → docker 그룹에 docker.io/compose 설치 + 버전 고정 + 서비스 기동 + docker 그룹 추가
-- 버전과 대상 계정은 인벤토리 `docker` 그룹에서 관리 (`docker_version`, `docker_compose_version`, `docker_users`)
+## 📜 Kafka 플레이북 (kafka_remove_ansible.yml / kafka_prereq_ansible.yml)
+> **브로커는 K8s 의 Strimzi 가 소유합니다. 이 두 플레이북은 컷오버 선행 단계입니다.**
+- **승계 주체는 Terraform 저장소 `105-strimzi`(Operator + CRD) + `301-kafka`(Kafka/KafkaNodePool/KafkaTopic CR)** 입니다.
+- 구 설계와 달라진 점 셋:
+  - 브로커가 **hostNetwork 를 벗었습니다**(Strimzi 미지원) → 노드 포트 9092/9093/9094 를 쓰지 않고 클러스터 내부 리스너 하나만 씁니다.
+  - 데이터가 hostPath 가 아니라 **정적 local PV** 입니다 — `/data/kafka-broker` · `/data/kafka-controller`.
+  - **컨트롤러 3 + 브로커 3** 으로 역할이 갈렸습니다(node id 100~102 / 0~2). 브로커 번호는 구 systemd `node.id` 승계라 메트릭 시계열이 이어집니다.
+- `kafka_remove_ansible.yml` — 유닛·설정·설치 디렉토리·**데이터(/data/kafka, 복구 불가)**·kafka 계정 제거 (멱등 — 재실행 안전)
+- `kafka_prereq_ansible.yml` — local PV 디렉토리 2종 생성 + 권한/경로충돌 검증 (멱등)
+- **실행 순서: remove → prereq → `helm install strimzi 105-strimzi` → `helm install kafka 301-kafka`**
+- ⚠ `kafka_remove` 가 지우는 `/data/kafka` 와 새 PV 경로가 **겹치지 않는 것이 안전장치**입니다 — 겹치면 롤 재실행 한 번이 전 노드 데이터를 동시에 지웁니다. `kafka_prereq` 의 assert 와 `301-kafka/values.schema.json` 의 `not` 패턴이 양쪽에서 막습니다.
+- ⚠ 포트가 겹치지 않으므로 '공존 불가' 근거는 사라졌지만 remove 를 먼저 하는 이유는 남습니다 — 브로커가 둘로 갈리면 클라이언트가 어느 쪽에 붙었는지 알 수 없습니다.
+- 토픽은 301-kafka 의 KafkaTopic CR 이, 브로커↔노드 고정표는 같은 차트 values 의 `kafka.nodes` 가 승계
 
 ---
 </br>
 
-## 📜 Kafka 플레이북 (kafka_ansible.yml)
-> **Kafka(KRaft 3노드 로컬 클러스터) 설치 플레이북입니다.**
-- **Play 1** → kafka 그룹 전 노드에 tarball 설치 + KRaft 구성 + systemd 기동 + JMX exporter
-- **Play 2** → 한 노드(`ap`)에서 파이프라인 토픽 생성(`--if-not-exists`)
-- 버전/포트/토픽 목록은 인벤토리 `kafka` 그룹에서 관리 (`kafka_version`, `kafka_cluster_id`, `kafka_topic_list` 등)
-- **⚠️ Kafka 4.0+ 브로커는 Java 17 필수 → java 롤(`java_version: "17"`) 선행 적용 필요**
+
+## 📜 MinIO 제거·드라이브 선행작업 플레이북 (minio_remove_ansible.yml / minio_ansible.yml)
+> **구 로컬(systemd) MinIO 를 걷어내고, K8s MinIO 가 쓸 드라이브만 남기는 컷오버 한 쌍입니다.**
+- **서버는 Terraform 저장소 `304-minio`(Helm, 노드 고정 StatefulSet — hostNetwork + hostPath)가 승계**했습니다
+  — 포트(9000/9001)·드라이브 경로(/data/minio/diskN)·이레이저 구성(3노드×2드라이브) 동일.
+- `minio_remove_ansible.yml`: 유닛·설정·바이너리·계정과 **드라이브 내용물(복구 불가)**을 제거합니다
+  (멱등 — 유닛 존재 가드라 컷오버 후 재실행해도 K8s 데이터를 지우지 않습니다).
+  **⚠️ 새 서버가 같은 호스트 포트를 쓰므로 `304-minio` helm install 전에 반드시 먼저 실행**
+- `minio_ansible.yml`(`minio_prereq` 롤): 드라이브(루프 이미지 마운트)만 준비합니다 — longhorn_prereq 와
+  같은 성격의 노드 선행작업. 드라이브 자체는 제거 대상이 아니며 304-minio 가 hostPath 로 이어받습니다.
+- 버킷 생성·시드 주입은 304-minio 차트의 init Job 이, 루트 자격증명은 300-data-layer-base 의 공용 Secret 이 승계
 
 ---
 </br>
@@ -796,10 +811,6 @@ fail_msg: "[FAIL] sshpass install failed"
 
 ### 🔹 packages → [`📂 packages.md`](./roles/packages/tasks/packages.md)
 - 기본 패키지 일괄 설치 (인벤토리 `install_packages` 기준)
----
-
-### 🔹 pip_packages → [`📂 pip_packages.md`](./roles/pip_packages/tasks/pip_packages.md)
-- Python 패키지 설치 (인벤토리 `pip_packages` 기준)
 ---
 
 ### 🔹 nicname → [`📂 nicname.md`](./roles/nicname/tasks/nicname.md)
@@ -915,16 +926,19 @@ fail_msg: "[FAIL] sshpass install failed"
 - Helm CLI 설치 → 공식 CDN tarball + sha256 검증 + 버전 고정 링크(`/usr/local/bin/helm`) (인벤토리 `helm_version`, `helm_sha256` 기준)
 ---
 
-### 🔹 docker → [`📂 docker.md`](./roles/docker/tasks/docker.md)
-- Docker(docker.io) + compose 플러그인 설치·버전 고정 + docker 그룹 추가 → docker-ce 대신 docker.io로 K8s containerd와 공존 (인벤토리 `docker_version`, `docker_compose_version`, `docker_users` 기준)
+### 🔹 kafka_remove → [`📂 kafka_remove.md`](./roles/kafka_remove/tasks/kafka_remove.md)
+- 구 로컬(systemd) Kafka 제거 — 유닛/설정/데이터/계정까지, 멱등 → 브로커는 Terraform 301-kafka(Helm)가 승계, 같은 호스트 포트라 helm install 전에 선행 (경로는 리터럴 — group_vars/kafka.yml 은 함께 퇴역)
 ---
 
-### 🔹 kafka → [`📂 kafka.md`](./roles/kafka/tasks/kafka.md)
-- Kafka tarball 설치 + KRaft 3노드 클러스터 구성 + systemd 기동 + JMX Prometheus exporter + Java 17 필수 (인벤토리 `kafka_version`, `kafka_cluster_id`, `kafka_data_dir` 등 기준)
+### 🔹 minio_remove → [`📂 minio_remove.md`](./roles/minio_remove/tasks/minio_remove.md)
+- 구 로컬(systemd) MinIO 제거 — 유닛/설정/바이너리/계정 + 드라이브 내용물(가드 있는 멱등) → 서버는 Terraform 304-minio(Helm)가 승계, 같은 호스트 포트라 helm install 전에 선행. 드라이브(마운트)는 304 가 이어받으므로 남긴다
 ---
 
-### 🔹 kafka_topics → [`📂 kafka_topics.md`](./roles/kafka_topics/tasks/kafka_topics.md)
-- 파이프라인 계약 토픽 16종 생성(`--if-not-exists`) + 존재 검증 → 한 노드에서만 실행, 파티션 수는 운영 중 변경 금지 (인벤토리 `kafka_topic_list`, `kafka_topic_partitions` 기준)
+### 🔹 minio_prereq → [`📂 minio_prereq.md`](./roles/minio_prereq/tasks/minio_prereq.md)
+### 🔹 kafka_prereq → [`📂 kafka_prereq.md`](./roles/kafka_prereq/tasks/kafka_prereq.md)
+### 🔹 buildkitd → [`📂 buildkitd.md`](./roles/buildkitd/tasks/buildkitd.md)
+### 🔹 neo4j → [`📂 neo4j.md`](./roles/neo4j/tasks/neo4j.md)
+- 304-minio 가 hostPath 로 쓰는 드라이브 준비 — 루프 이미지 생성/포맷/마운트(fstab), 멱등 → longhorn_prereq 와 같은 성격의 노드 선행작업 (구 minio 롤의 드라이브 태스크만 존속한 것)
 ---
 
 

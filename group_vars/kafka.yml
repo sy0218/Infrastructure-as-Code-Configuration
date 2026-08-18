@@ -1,65 +1,29 @@
-# =======================================
-# Kafka 설치 버전 고정 (kafka 사용)
-# → ADR 0: 브로커는 K8s 가 아니라 로컬(systemd) 설치
-# 로컬 디스크 I/O, 짧은 네트워크 경로, Kafka 자체 HA(RF=3)가 이유.
-# =======================================
-kafka_version: "4.0.1"
-kafka_scala_version: "2.13"
-kafka_jmx_exporter_version: "1.0.1"
+# =====================================================
+# Kafka 노드 선행작업 변수 (Strimzi 로컬 PV)
+# =====================================================
+# 브로커는 K8s(Terraform 저장소 301-kafka)의 Strimzi 클러스터로 이관됐다.
+# 이 그룹의 변수는 그 차트가 전제하는 **노드 디렉토리**만 다룬다
+# — minio_prereq 의 드라이브, longhorn_prereq 의 /data/longhorn 과 같은 성격이다.
+#
+# [주의] 경로는 301-kafka values 의 kafka.broker.dataPath / kafka.controller.dataPath 와
+#   같은 값이어야 한다(같은 커밋 규칙). 어긋나면 PV 가 없는 경로를 가리켜
+#   파드가 마운트 실패로 멈춘다.
+# =====================================================
 
-# =======================================
-# 설치 경로 / 실행 계정 (kafka 사용)
-# → kafka_home 은 심볼릭 링크(실체는 kafka_<스칼라>-<버전>)
-#     — project_envs 의 KAFKA_HOME 과 반드시 일치
-# → kafka_java_home 은 java 롤이 설치한 JDK 경로 조립
-#     — project_envs 의 JAVA_HOME 과 동일
-# =======================================
-kafka_install_root: /application
-kafka_home: /application/kafka
-kafka_data_dir: /data/kafka # 로그 세그먼트
-kafka_log_dir: /logs/kafka # 브로커 애플리케이션 로그 (LOG_DIR)
-kafka_user: kafka # 로그인 불가 시스템 계정
-kafka_java_home: "/usr/lib/jvm/java-{{ java_version }}-openjdk-amd64"
+# ⚠ /data/kafka 아래에 두지 않는다.
+#   kafka_remove 롤이 구 systemd 브로커를 정리하며 /data/kafka 를 통째로 지운다
+#   (그 롤의 가드는 유닛/설치루트 존재 여부라 데이터 경로를 보호하지 않는다).
+#   경로를 갈라 두면 두 수명주기가 완전히 분리되어, 롤을 언제 실행해도 안전하다.
+#   301-kafka 의 values.schema.json 도 같은 규칙을 'not' 패턴으로 강제한다.
+kafka_broker_data_dir: /data/kafka-broker
+kafka_controller_data_dir: /data/kafka-controller
 
-# =======================================
-# KRaft 클러스터 구성 (kafka 사용)
-#   → 사용 포트: 9092 클라이언트 / 9093 브로커간 / 9094 컨트롤러 / 9404 JMX 메트릭.
-#   바꾸면 Terraform 300-data-layer-base 의 kafka_bootstrap_servers,
-#   302-monitoring 의 kafka_jmx_targets 도 반드시 함께 고칠 것
-# =======================================
-kafka_cluster_id: "HX65iPPZTWOoFe5w-Od0Sw"
-kafka_client_port: "9092"
-kafka_internal_port: "9093"
-kafka_controller_port: "9094"
-kafka_jmx_port: "9404"
-
-# =======================================
-# 복제/파티션 기본값 (kafka 사용)
-# → min ISR 1 = 브로커 2대가 죽어도 쓰기 지속 (내구성 ↔ 가용성 트레이드오프)
-# =======================================
-kafka_replication_factor: "3"
-kafka_min_isr: "1"
-kafka_num_partitions: "3"
-
-# =======================================
-# 토픽 프로비저닝 (kafka_topics 사용)
-# =======================================
-kafka_topic_partitions: "3"
-kafka_topic_list:
-  - raw.qm.qm-chemical.batches
-  - raw.qm.qm-chemical.qc-results
-  - raw.qm.qm-chemical.event-logs
-  - raw.qm.qm-chemical.replacement-history
-  - raw.qm.qm-chemical.control-loop-defs
-  - raw.qm.qm-chemical.claims
-  - raw.qm.qm-chemical.lab-results
-  - raw.qm.qm-chemical.sensor-timeseries
-  # 파이프라인 내부 (cdm / dlq / lineage)
-  - cdm-topic
-  - dlq-cdm-topic
-  - dlq-cdm-consumer-rdb
-  - dlq-cdm-consumer-graph
-  - dlq-cdm-consumer-warehouse
-  - dlq.raw
-  - lineage-topic
-  - dlq-lineage
+# Strimzi 브로커/컨트롤러 컨테이너는 **비루트**로 뜬다(uid 1001, gid 0).
+# 구 systemd 브로커의 kafka 계정과 달리 노드에 대응 계정이 없으므로 숫자로 지정한다.
+#
+# 소유자를 root 로 두고 그룹 쓰기(0770)를 여는 방식을 쓰는 이유:
+#   파드 spec 의 fsGroup: 0 + fsGroupChangePolicy: OnRootMismatch 가
+#   최상위 소유가 맞으면 재귀 chown 을 건너뛴다 → 데이터가 쌓인 뒤에도 기동이 느려지지 않는다.
+kafka_data_owner: root
+kafka_data_group: root
+kafka_data_mode: '0770'

@@ -1,0 +1,14 @@
+# =====================================================
+# Kafka 로컬(systemd) 설치 제거 — K8s(Helm 301-kafka) 이관 컷오버
+#   → 새 브로커가 같은 호스트 포트(9092/9093/9094/9404)를 쓰므로
+#     Terraform 저장소 301-kafka 의 helm install 전에 먼저 실행한다.
+#   → 데이터(/data/kafka)까지 지운다(복구 불가) — 이관 결정에 포함된 사항.
+#   → kafka 인벤토리 그룹은 롤과 함께 퇴역했다 → 대상은 Ubuntu_Servers(같은 3노드).
+# =====================================================
+- name: "[ Kafka Remove (systemd → K8s 이관) ]"
+  hosts: Ubuntu_Servers
+  become: true
+  gather_facts: false
+
+  roles:
+    - { role: kafka_remove, tags: ['kafka_remove'] } # 서비스 중지/해제 + 유닛/설정/데이터/계정 제거 + 검증

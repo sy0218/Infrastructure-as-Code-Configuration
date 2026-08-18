@@ -31,11 +31,12 @@ data_layer_vip_dns_names:
   - data-layer-api
   - data-layer-grafana
   - data-layer-prometheus
+  - data-layer-headlamp
 
 # =======================================
 # 인그레스 진입점 VIP (etc_hosts 사용)
 # → MetalLB 가 이 주소를 노드 한 대에 붙여 두고, 그 노드가 죽으면 다른 노드로 옮긴다.
-# Terraform 102-ingress 의 ingress_vip / 305-api 의 ingress_vip 와 글자 그대로 같아야 한다. 노드망(192.168.56.0/24) 안이면서 노드 IP/DHCP 대역과 겹치면 안 된다
+# Terraform 102-ingress 의 ingress_vip / 306-api 의 ingress_vip 와 글자 그대로 같아야 한다. 노드망(192.168.56.0/24) 안이면서 노드 IP/DHCP 대역과 겹치면 안 된다
 #   — L2 모드는 같은 브로드캐스트 도메인에서 ARP 로 광고하는 방식이다.
 # =======================================
 ingress_vip: 192.168.56.240
@@ -55,12 +56,6 @@ install_packages:
   - bash-completion
 
 # =======================================
-# 설치할 Python 패키지 목록 (pip_packages 사용)
-# =======================================
-pip_packages:
-  - docker==7.1.0
-
-# =======================================
 # logrotate 기본 설정 (logrotate 사용)
 # → regexp: 치환 대상 라인, line: 적용 값
 # =======================================
@@ -73,8 +68,8 @@ logrotate_options:
 
 # =======================================
 # 설치할 자바 버전 (java, package_version_lock 사용)
-# → Kafka 4.0+ 브로커는 Java 17 필수
-#   kafka 그룹의 kafka_java_home 과 항상 함께 움직인다
+# → 원래 근거였던 로컬 Kafka 브로커(Java 17 필수)는 K8s(301-kafka)로 이관됐다.
+#   노드 공용 JDK 로 유지한다(무해) — 제거하려면 java 롤과 아래 JAVA_HOME 을 함께.
 # =======================================
 java_version: "17"
 
@@ -97,7 +92,8 @@ bashrc_targets:
   - /etc/skel/.bashrc
 
 # project 환경 변수
+# (KAFKA_HOME 은 브로커의 K8s 이관으로 퇴역 — CLI 는 kubectl exec 로 브로커 파드의
+#  /opt/kafka/bin 을 쓴다. 노드 반영은 ubuntu_ansible.yml --tags bash_common)
 project_envs:
   - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-  - KAFKA_HOME=/application/kafka
-  - PATH=$JAVA_HOME/bin:$KAFKA_HOME/bin:$PATH
+  - PATH=$JAVA_HOME/bin:$PATH
