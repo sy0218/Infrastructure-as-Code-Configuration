@@ -9,26 +9,30 @@
 ## 🧩 main.yml
 
 ```yaml
-# -----------------------------------------------------
+# =====================================================
 # 우분투 기본  Packages 설치
-# -----------------------------------------------------
+# =====================================================
 
+# -----------------------------------------------------
 # 1. 기본 유틸리티 패키지 설치
+# -----------------------------------------------------
 - name: "Install base packages"
   apt:
     name: "{{ install_packages }}"
     state: present # 없으면 설치
     update_cache: yes # apt update 먼저 실행
-    cache_valid_time: 3600 # 캐시가 1시간 이내면 update 생략 (매 실행 시간 절약)
+    cache_valid_time: 3600 # 캐시가 1시간 이내면 update 생략
 
+
+# -----------------------------------------------------
 # 2. 패키지 설치 검증
+# -----------------------------------------------------
 - name: "Check installed packages"
   command: "dpkg -s {{ item }}"
   loop: "{{ install_packages }}"
   register: packages_check
   changed_when: false
   failed_when: false
-
 
 - name: "Assert packages installed"
   assert:

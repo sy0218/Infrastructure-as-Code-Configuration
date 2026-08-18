@@ -2,7 +2,7 @@
 
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <ANSIBLE_HOME> <TARGET>"
-    echo "TARGET: all | control | common | docker ..."
+    echo "TARGET: all | control | ..."
     exit 1
 fi
 

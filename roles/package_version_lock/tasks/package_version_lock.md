@@ -9,17 +9,22 @@
 
 ## 🧩 main.yml
 ```yaml
-# -----------------------------------------------------
+# =====================================================
 # 패키지 버전 고정
-# -----------------------------------------------------
+# =====================================================
 
+
+# -----------------------------------------------------
 # 1. 커널 버전 수집
+# -----------------------------------------------------
 - name: "Get kernel version"
   command: uname -r
   register: kernel_version
   changed_when: false
 
+# -----------------------------------------------------
 # 2. 고정 대상 패키지 목록 구성 (hold/검증에서 공용)
+# -----------------------------------------------------
 - name: "Build hold package list"
   set_fact:
     hold_packages:
@@ -29,7 +34,9 @@
       - "openjdk-{{ java_version }}-jre"
       - "openjdk-{{ java_version }}-jre-headless"
 
-# 3. 커널 및 Java 패키지 hold (dpkg_selections 자체가 멱등 — command apt-mark hold는 매번 changed)
+# -----------------------------------------------------
+# 3. 커널 및 Java 패키지 hold (dpkg_selections 자체가 멱등 → command apt-mark hold는 매번 changed)
+# -----------------------------------------------------
 - name: "Hold kernel and Java packages"
   dpkg_selections:
     name: "{{ item }}"
@@ -37,7 +44,7 @@
   loop: "{{ hold_packages }}"
 
 # -----------------------------------------------------
-# 검증
+# 4. 검증
 # -----------------------------------------------------
 - name: "Check held packages"
   command: apt-mark showhold

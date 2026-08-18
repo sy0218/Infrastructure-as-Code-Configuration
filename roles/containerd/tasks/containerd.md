@@ -124,8 +124,9 @@ containerd 바이너리에 내장돼 실행 시 커널에 로드되므로, 패�
   register: registry_hosts
 
 # 9. 설정이 변경된 경우만 재시작 (매 실행 재시작 방지 — config.toml/hosts.toml 반영에는 재시작 필수)
-#    ⚠ 재시작은 이 노드의 모든 컨테이너를 흔든다. s1 은 docker(CDC 소스 DB)가 containerd 를
-#      공유하므로 그 컨테이너도 함께 죽는다 → 플레이는 serial: 1 로 한 대씩 돈다.
+#    ⚠ 재시작은 이 노드의 모든 컨테이너를 흔든다 — containerd 를 공유하는 비 K8s
+#      컨테이너(예: docker)도 함께 죽는다. 플레이에 serial 은 없고 forks=2 라 두 대가
+#      동시에 재시작될 수 있다 → 운영 중 클러스터에서는 --limit 으로 한 대씩 돌릴 것.
 - name: "Restart containerd on config change"
   systemd:
     name: containerd
@@ -137,7 +138,6 @@ containerd 바이너리에 내장돼 실행 시 커널에 로드되므로, 패�
 #     옛 pause:3.8 만 있을 수 있다. 미리 받아두지 않으면 재시작 직후 샌드박스 생성이 느려진다.
 - name: "Pre-pull pod sandbox (pause) image"
   command: ctr -n k8s.io images pull {{ sandbox_image }}
-  register: sandbox_pull
   changed_when: false
   failed_when: false
 

@@ -7,11 +7,14 @@
 
 ## 🧩 main.yml
 ```yaml
-# -----------------------------------------------------
+# =====================================================
 # logrotate 기본 설정
-# -----------------------------------------------------
+# =====================================================
 
-# 1. logrotate.conf 설정 적용 (lineinfile 자체가 멱등 — 항목은 host.yml의 logrotate_options로 관리)
+
+# -----------------------------------------------------
+# 1. logrotate.conf 설정 적용 (lineinfile 자체가 멱등 → 항목은 host.yml의 logrotate_options로 관리)
+# -----------------------------------------------------
 - name: "Apply logrotate configuration"
   lineinfile:
     path: /etc/logrotate.conf
@@ -21,7 +24,7 @@
   loop: "{{ logrotate_options }}"
 
 # -----------------------------------------------------
-# logrotate 설정 검증 (타겟 서버 파일 확인 — lookup은 컨트롤 노드를 읽으므로 사용 금지)
+# 2. logrotate 설정 검증 (타겟 서버 파일 확인)
 # -----------------------------------------------------
 - name: "Check logrotate configuration"
   command: "grep -Fx '{{ item.line }}' /etc/logrotate.conf"

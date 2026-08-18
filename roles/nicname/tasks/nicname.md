@@ -7,11 +7,14 @@
 
 ## 🧩 main.yml
 ```yaml
-# -----------------------------------------------------
+# =====================================================
 # GRUB NIC 이름 고정 (eth*)
-# -----------------------------------------------------
+# =====================================================
 
-# 1. GRUB NIC 파라미터 설정 (lineinfile 자체가 멱등 — 사전 체크 불필요)
+
+# -----------------------------------------------------
+# 1. GRUB NIC 파라미터 설정 (lineinfile 자체가 멱등 → 사전 체크 불필요)
+# -----------------------------------------------------
 - name: "Configure GRUB NIC parameter (fix to eth*)"
   lineinfile:
     path: /etc/default/grub
@@ -19,7 +22,9 @@
     line: 'GRUB_CMDLINE_LINUX_DEFAULT="net.ifnames=0 biosdevname=0"'
   notify: update-grub # 변경 시에만 grub-mkconfig 실행
 
+# -----------------------------------------------------
 # 2. GRUB NIC 설정 검증
+# -----------------------------------------------------
 - name: "Check applied GRUB NIC parameter"
   command: "grep '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub"
   register: grub_check
@@ -44,6 +49,15 @@
 ### 2️⃣ 설정 검증
 - `grep`으로 현재 라인 다시 읽어 `assert`
 - `net.ifnames=0`, `biosdevname=0` 두 토큰이 모두 포함됐는지 검증
+---
+<br>
+
+## 🧩 handlers/main.yml
+```yaml
+# GRUB 설정 적용
+- name: update-grub
+  command: grub-mkconfig -o /boot/grub/grub.cfg
+```
 ---
 <br>
 

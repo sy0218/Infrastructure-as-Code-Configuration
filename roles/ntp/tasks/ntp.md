@@ -8,21 +8,24 @@
 
 ## 🧩 main.yml
 ```yaml
-# -----------------------------------------------------
+# =====================================================
 # NTP 설정
-# -----------------------------------------------------
+# =====================================================
 
-# 1. NTP 서버 설정 (lineinfile 자체가 멱등 — 사전 체크 불필요)
+
+# -----------------------------------------------------
+# 1. NTP 서버 설정 (lineinfile 자체가 멱등)
+# -----------------------------------------------------
 - name: "Set NTP server to 0.kr.pool.ntp.org"
   lineinfile:
     path: /etc/systemd/timesyncd.conf
     regexp: '^#?NTP='
     line: 'NTP=0.kr.pool.ntp.org'
     state: present
-  notify: Restart timesyncd # 변경 시에만 재시작 (매번 restart는 비멱등)
+  notify: Restart timesyncd # 변경 시에만 재시작
 
 # -----------------------------------------------------
-# NTP 설정 검증 (타겟 서버 파일 확인 — lookup은 컨트롤 노드를 읽으므로 사용 금지)
+# 2. NTP 설정 검증 (타겟 서버 파일 확인)
 # -----------------------------------------------------
 - name: "Check NTP server setting"
   command: "grep '^NTP=' /etc/systemd/timesyncd.conf"

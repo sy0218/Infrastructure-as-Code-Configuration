@@ -95,7 +95,8 @@
     success_msg: "Good!.. | /etc/hosts VIP entry present: {{ ingress_vip }} {{ data_layer_vip_dns_names | join(' ') }}"
     fail_msg: "ERROR!.. | /etc/hosts VIP entry missing/incomplete: {{ ingress_vip }} {{ data_layer_vip_dns_names | join(' ') }}"
 
-# -----------------------------------------------------                     # 6. 이름 출현 횟수까지 확인
+# -----------------------------------------------------     
+# 6. 이름 출현 횟수까지 확인
 # -----------------------------------------------------
 - name: "Count /etc/hosts ingress VIP DNS name occurrences"
   shell: "grep -owE '{{ data_layer_vip_dns_names | join('|') }}' /etc/hosts | wc -l"

@@ -294,52 +294,47 @@ State를 기반으로 현재 환경과 코드의 차이를 비교하여 필요�
 ## 📂 디렉토리 구조
 ```bash
 Infrastructure-as-Code-Ansible/
-├── ansible.cfg            # Ansible 공통 설정
-├── host.yml               # 인벤토리 (호스트/그룹 구조)
-├── group_vars/            # 그룹별 변수 (그룹당 파일 하나, 자동 로드)
-│   ├── Ubuntu_Servers.yml
-│   ├── kubernetes.yml
-│   ├── longhorn.yml
-│   ├── terraform.yml
-│   ├── helm.yml
-│   ├── docker.yml
-│   ├── postgres.yml
-│   ├── minio.yml
-│   ├── neo4j.yml
-│   └── buildkitd.yml
-├── ubuntu_ansible.yml     # 운영 서버 Configuration 플레이북
-├── k8s_ansible.yml        # K8s 클러스터 구성 플레이북
-├── longhorn_ansible.yml   # Longhorn 사전 준비 플레이북
-├── terraform_ansible.yml  # Terraform 설치 플레이북
-├── helm_ansible.yml       # Helm 설치 플레이북
-├── kafka_prereq_ansible.yml # Strimzi 로컬 PV 디렉토리 선행작업 플레이북
-├── kafka_remove_ansible.yml # 구 로컬(systemd) Kafka 제거 플레이북 (브로커는 301-kafka 가 승계)
-├── minio_remove_ansible.yml # 구 로컬(systemd) MinIO 제거 플레이북 (서버는 304-minio 가 승계)
-├── minio_ansible.yml      # MinIO 드라이브 선행작업 플레이북 (서버는 304-minio — minio_prereq 롤)
-├── neo4j_ansible.yml      # Neo4j 설치 플레이북
-├── buildkitd_ansible.yml  # BuildKit(빌드 데몬) 설치 플레이북
-├── bin/
-│   ├── ansible_setup.sh       # Ansible 설치 (Control Node용)
-│   ├── start_ansible.sh       # 운영 서버 Configuration 실행
-│   ├── start_kubernetes.sh    # Kubernetes 구성 실행
-│   ├── start_longhorn.sh      # Longhorn 사전 준비 실행
-│   ├── start_terraform.sh     # Terraform 설치 실행
-│   ├── start_helm.sh          # Helm 설치 실행
-│   ├── start_docker.sh        # Docker 설치 실행
-│   ├── remove_kafka.sh        # 구 로컬 Kafka 제거 실행 (K8s 301-kafka 컷오버 선행)
-│   ├── remove_minio.sh        # 구 로컬 MinIO 제거 실행 (K8s 304-minio 컷오버 선행)
-│   ├── start_postgresql.sh    # PostgreSQL 설치 실행
-│   ├── start_minio.sh         # MinIO 드라이브 선행작업 실행
-│   ├── start_neo4j.sh         # Neo4j 설치 실행
-│   └── start_buildkitd.sh     # BuildKit 설치 실행
-├── COMMIT_CONVENTION.md  # Git 커밋 규칙
+├── ansible.cfg              # Ansible 공통 설정
+├── host.yml                 # 관리 대상 서버 목록 및 그룹
+├── group_vars/              # 그룹별 설정값
+│   ├── Ubuntu_Servers.yml   # 공통 서버 설정
+│   ├── kubernetes.yml       # Kubernetes / containerd / runc 버전
+│   ├── longhorn.yml         # Longhorn 설정
+│   ├── kafka.yml            # Kafka Local PV 경로
+│   ├── terraform.yml        # Terraform 버전
+│   ├── helm.yml             # Helm 버전
+│   └── buildkitd.yml        # BuildKit 버전 및 설정
+│
+├── ubuntu_ansible.yml       # 기본 서버 구성
+├── k8s_ansible.yml          # Kubernetes 클러스터 구성
+├── longhorn_ansible.yml     # Longhorn 노드 사전 준비
+├── kafka_prereq_ansible.yml # Kafka Local PV 사전 준비
+├── terraform_ansible.yml    # Terraform 설치
+├── helm_ansible.yml         # Helm 설치
+├── buildkitd_ansible.yml    # BuildKit 설치
+│
+├── bin/                     # 플레이북 실행 스크립트
+│   ├── ansible_setup.sh
+│   ├── start_configuration.sh
+│   ├── start_kubernetes.sh
+│   ├── start_longhorn.sh
+│   ├── start_kafka_prereq.sh
+│   ├── start_terraform.sh
+│   ├── start_helm.sh
+│   └── start_buildkitd.sh
+│
 ├── callback_plugins/
-│   └── summary_table.py  # 실행 결과 요약 표 callback 플러그인
-└── roles/                # 기능별 Ansible Role (37종)
-    ├── control/
-    ├── packages/
-    ├── java/
-    └── ...
+│   └── summary_table.py     # 실행 결과 요약 출력
+│
+├── CLAUDE.md                # 작업 규칙
+├── COMMIT_CONVENTION.md     # Git 커밋 규칙
+├── README.md                # 사용 가이드
+│
+└── roles/                   # 실제 서버 설정 작업
+    ├── [OS 공통]            # 기본 OS 설정 및 공통 패키지
+    ├── [Kubernetes]         # Kubernetes 클러스터 구성
+    ├── [선행작업]           # Longhorn / Kafka 사전 준비
+    └── [도구]               # Terraform / Helm / BuildKit 설치
 ```
 > **roles/ 디렉토리는 기능별 모듈 구조로 구성되며, 각 role은 tasks/main.yml을 기준으로 실행됩니다.**
 
@@ -351,56 +346,6 @@ Infrastructure-as-Code-Ansible/
 ```bash
 sudo /my_project/Infrastructure-as-Code-Ansible/bin/ansible_setup.sh
 ```
-
----
-</br>
-
-## 🚀 Ansible 실행
-> **`[중요]`** **Ansible 프로젝트 홈 디렉토리의 절대 경로 + tag** 를 인자로 전달하여 실행합니다.
-
-```bash
-# 서버 프로비저닝 (ubuntu_ansible.yml)
-/my_project/Infrastructure-as-Code-Ansible/bin/start_ansible.sh /my_project/Infrastructure-as-Code-Ansible all
-
-# K8s 클러스터 구성 (k8s_ansible.yml)
-/my_project/Infrastructure-as-Code-Ansible/bin/start_kubernetes.sh /my_project/Infrastructure-as-Code-Ansible all
-
-# Longhorn 노드 사전 준비 (longhorn_ansible.yml)
-/my_project/Infrastructure-as-Code-Ansible/bin/start_longhorn.sh /my_project/Infrastructure-as-Code-Ansible all
-
-# Terraform 설치 (terraform_ansible.yml)
-/my_project/Infrastructure-as-Code-Ansible/bin/start_terraform.sh /my_project/Infrastructure-as-Code-Ansible all
-
-# Helm 설치 (helm_ansible.yml)
-/my_project/Infrastructure-as-Code-Ansible/bin/start_helm.sh /my_project/Infrastructure-as-Code-Ansible all
-
-# 구 로컬 Kafka 제거 (kafka_remove_ansible.yml)
-# ⚠ 브로커는 Terraform 저장소 301-kafka(Helm)로 이관됐다. 이 스크립트는 컷오버 선행
-#   단계로 구 systemd 설치를 데이터까지 걷어낸다 — 301-kafka helm install 전에 실행.
-/my_project/Infrastructure-as-Code-Ansible/bin/remove_kafka.sh /my_project/Infrastructure-as-Code-Ansible
-
-# 구 로컬 MinIO 제거 (minio_remove_ansible.yml)
-# ⚠ 서버는 Terraform 저장소 304-minio(Helm)로 이관됐다. 이 스크립트는 컷오버 선행 단계로
-#   구 systemd 설치를 드라이브 내용물까지 걷어낸다 — 304-minio helm install 전에 실행.
-/my_project/Infrastructure-as-Code-Ansible/bin/remove_minio.sh /my_project/Infrastructure-as-Code-Ansible
-
-# MinIO 드라이브 선행작업 (minio_ansible.yml — minio_prereq 롤)
-# 루프 이미지 2장 생성/포맷/마운트. 서버는 304-minio 가 소유하고, 이 플레이는 그 차트가
-# 전제하는 드라이브만 준비한다(멱등 — longhorn_prereq 와 같은 성격).
-/my_project/Infrastructure-as-Code-Ansible/bin/start_minio.sh /my_project/Infrastructure-as-Code-Ansible all
-
-# Neo4j 설치 (neo4j_ansible.yml)
-/my_project/Infrastructure-as-Code-Ansible/bin/start_neo4j.sh /my_project/Infrastructure-as-Code-Ansible all
-
-# BuildKit 설치 (buildkitd_ansible.yml) — docker 없는 이미지 빌드/push 데몬
-# ⚠ push 는 200-harbor apply 이후에나 가능하다 (설치 자체는 언제든 무방)
-/my_project/Infrastructure-as-Code-Ansible/bin/start_buildkitd.sh /my_project/Infrastructure-as-Code-Ansible all
-```
-> ⚠️ **반드시 Ansible 프로젝트의 절대 경로와 태그를 인자로 전달해서 실행하세요.**
-
-> `ansible.cfg`의 inventory/roles_path가 상대 경로라 프로젝트 루트에서 실행돼야 합니다
-
-> **`start_*.sh`가 `cd`를 대신 해줍니다.**
 
 ---
 </br>
@@ -419,7 +364,7 @@ sudo /my_project/Infrastructure-as-Code-Ansible/bin/ansible_setup.sh
 </br>
 
 ## ⚙️ Custom Callback Plugin
-> `Ansible` 기본 출력은 실행 성공/실패 정도만 보여주기 때문에 운영자가 전체 결과를 빠르게 판단하기 어렵습니다.
+> **`Ansible` 기본 출력은** 실행 성공/실패 정도만 보여주기 때문에 **운영자가 전체 결과를 빠르게 판단하기 어렵습니다.**
 
 ### `Custom Callback Plugin`을 사용하면 `Playbook` 종료 후 → 자동화 전체 결과를 한눈에 확인할 수 있습니다.
 - `Role / Task` 별 실행 결과
@@ -624,100 +569,303 @@ class CallbackModule(CallbackBase):
 - **대상 서버 목록과 그룹 구조는 → `host.yml`**
 - **롤에서 사용하는 변수는 → `group_vars/<그룹>.yml`**
 
-- **롤에는 `defaults/`, `vars/`가 없어 모든 변수가 `group_vars/`에 모여 있습니다.**
+- **롤은 모든 변수가 `group_vars/`에 모여 있습니다.**
 - **그룹 = 플레이북 단위** → 그룹에 서버를 추가/제거하는 것만으로 대상 확장
 - `host.yml`에는 구조와 호스트 고유값(`ansible_host`)만 둡니다
-- 접속 계정, sudo 비밀번호, 설치 패키지 목록, 버전 핀, 포트, 계정, 버킷 이름 등은 해당 그룹의 `group_vars/` 파일에서 관리
-- `group_vars/`는 인벤토리와 같은 디렉토리에 있어 **자동으로 로드**됩니다
+- **`group_vars/`는 인벤토리와 같은 디렉토리에 있어 자동으로 로드됩니다**
   - **`[주의]` 파일명은 그룹명과 대소문자까지 같아야 합니다**(`Ubuntu_Servers.yml`)
 
 | 그룹 | 대상 | 쓰는 플레이북 |
 |------|------|----------------|
 | `Ubuntu_Servers` | ap / s1 / s2 | ubuntu |
 | `kubernetes` (`kubernetes_master`=ap / `kubernetes_workers`=s1, s2) | ap / s1 / s2 | k8s |
-| `longhorn` / `docker` / `minio` | ap / s1 / s2 | longhorn / docker / minio |
-| `postgres` / `neo4j` | ap | postgresql / neo4j |
+| `longhorn`  | ap / s1 / s2 | longhorn  |
 | `terraform` / `helm` / `buildkitd` | s2 | terraform / helm / buildkitd |
 
 ---
 </br>
 
-## 📜 플레이북 (ubuntu_ansible.yml)
-> **Ubuntu 서버의 기본 패키지 설치, 시스템 설정, 런타임 환경 구성을 담당하는 메인 Ansible 플레이북입니다.**
-- **Play 1** → `Control Node` 설정 (`localhost`, `sshpass`)
-- **Play 2** → `Ubuntu_Servers` 그룹에 운영 서버 `Configuration` 롤 순차 적용
-- **적용할 롤은 `roles:` 목록에서 선택**
-- 순서 의존: `java` → `package_version_lock` / `bash_common`
-- ⚠ **스왑은 켠 채로 운영한다** → `disable_swap` 주석 / `enable_swap` 활성은 의도다(K8s LimitedSwap). 뒤집으면 K8s 플레이의 스왑 검증이 실패한다.
-- **태그를 통해 단독 재실행 가능(예시): `ansible-playbook ubuntu_ansible.yml --tags all/etc_hosts`**
+## 🚀 Ansible 실행
+> **`[중요]`** **Ansible 프로젝트 홈 디렉토리의 절대 경로 + tag** 를 인자로 전달하여 실행합니다.
+
+> ⚠️ **반드시 Ansible 프로젝트의 절대 경로와 태그를 인자로 전달해서 실행하세요.**
+
+> **`start_*.sh`가 `cd`를 대신 해줍니다.**
+
+```bash
+# 서버 프로비저닝 (ubuntu_ansible.yml)
+/my_project/Infrastructure-as-Code-Ansible/bin/start_configuration.sh /my_project/Infrastructure-as-Code-Ansible all
+
+# Longhorn 노드 사전 준비 (longhorn_ansible.yml)
+/my_project/Infrastructure-as-Code-Ansible/bin/start_longhorn.sh /my_project/Infrastructure-as-Code-Ansible all
+
+# Terraform 설치 (terraform_ansible.yml)
+/my_project/Infrastructure-as-Code-Ansible/bin/start_terraform.sh /my_project/Infrastructure-as-Code-Ansible all
+
+# Helm 설치 (helm_ansible.yml)
+/my_project/Infrastructure-as-Code-Ansible/bin/start_helm.sh /my_project/Infrastructure-as-Code-Ansible all
+
+# Kafka 노드 선행작업 (kafka_prereq_ansible.yml)
+#   → 로컬 PV 디렉토리 2종(/data/kafka-controller, /data/kafka-broker)을 
+#   → root:root 0770 으로 만들고 권한까지 검증한다.
+/my_project/Infrastructure-as-Code-Ansible/bin/start_kafka_prereq.sh /my_project/Infrastructure-as-Code-Ansible all
+
+# BuildKit 설치 (buildkitd_ansible.yml) → docker 없는 이미지 빌드/push 데몬
+/my_project/Infrastructure-as-Code-Ansible/bin/start_buildkitd.sh /my_project/Infrastructure-as-Code-Ansible all
+
+# K8s 클러스터 구성 (k8s_ansible.yml)
+/my_project/Infrastructure-as-Code-Ansible/bin/start_kubernetes.sh /my_project/Infrastructure-as-Code-Ansible all
+```
 
 ---
 </br>
 
-## 📜 K8s 플레이북 (k8s_ansible.yml)
-> **K8s 클러스터(kubeadm + containerd + Calico) 구성 플레이북입니다.**
-- **Play 1** → 필수 Ansible 컬렉션 사전 검증 (Control Node)
-- **Play 2** → kubernetes 그룹 공통 사전 준비 (k8s_prereq → containerd → k8s_packages)
-- **Play 3~4** → 컨트롤플레인 초기화(kubernetes_master) → 워커 조인(kubernetes_workers)
-- **해체용 `k8s_reset`** 플레이는 평소 **주석 상태** → 해체할 때만 위 K8s 롤을 주석 처리하고 이 플레이를 활성화
-- ⚠ **kubeadm init/join 은 1회성이다** → `pod_subnet` 등을 바꿔도 재실행으로 반영되지 않는다(k8s_reset 으로 해체 후 재구축)
+## 📜 플레이북 (`ubuntu_ansible.yml`)
+
+> **Ubuntu 서버의 기본 환경을 구성하는 메인 Ansible 플레이북입니다.**
 
 ---
-</br>
 
-## 📜 Longhorn 플레이북 (longhorn_ansible.yml)
-> **Longhorn(분산 블록 스토리지) 설치 전 노드 사전 준비 플레이북입니다.**
-- **Play 1** → longhorn 그룹 전 노드에 open-iscsi 설치 + multipathd 차단 + 데이터 경로 생성
-- 버전과 데이터 경로는 인벤토리 `longhorn` 그룹에서 관리 (`open_iscsi_version`, `longhorn_data_path`)
+### 주요 역할
 
----
-</br>
+- **Play 1 → Control Node**
+  - `localhost`에 `sshpass` 설치
+  - 패스워드 기반 SSH(`ansible_ssh_pass`) 사용을 위한 사전 설정
 
-## 📜 Terraform 플레이북 (terraform_ansible.yml)
-> **Terraform 설치 플레이북입니다.**
-- **Play 1** → terraform 그룹에 HashiCorp 저장소 등록 + Terraform 설치/버전 고정
-- 대상 호스트와 버전은 인벤토리 `terraform` 그룹에서 관리
+- **Play 2 → Ubuntu Servers**
+  - `ap / s1 / s2` 서버에 필요한 Role을 순서대로 적용
+  - 실행할 Role은 `roles:`에서 선택
+  - 계정, 패키지, Swap 등의 설정값은 `group_vars/Ubuntu_Servers.yml`에서 관리
 
 ---
-</br>
 
-## 📜 Helm 플레이북 (helm_ansible.yml)
-> **Helm 설치 플레이북입니다.**
-- **Play 1** → helm 그룹에 공식 CDN(get.helm.sh) 바이너리 설치 + sha256 검증 + 버전 고정 링크
-- 버전·체크섬·설치 경로는 인벤토리 `helm` 그룹에서 관리 (`helm_version`, `helm_sha256`, `helm_install_root`)
-- apt 저장소(baltocdn) 대신 바이너리 설치 — 랩 네트워크에서 SSL 인증서 검증이 실패한다(롤 주석 참조)
+### 실행 시 주의사항
+
+- **Role 순서**
+  - `java` → `package_version_lock` → `bash_common`
+  - Java 설치 후 버전 고정 및 `JAVA_HOME` 설정이 이루어짐
+
+- **Swap**
+  - Swap은 **켜진 상태로 운영**
+  - `disable_swap`은 주석 처리하고 `enable_swap`을 사용
+  - Kubernetes의 LimitedSwap 구성을 위한 설정
+
+- **`etc_hosts`**
+  - `/etc/hosts`를 **전체 재생성**
+  - `data_layer_dns_names`와 `data_layer_vip_dns_names`에 **같은 이름을 중복 등록하지 않음**
 
 ---
-</br>
 
-## 📜 Kafka 플레이북 (kafka_remove_ansible.yml / kafka_prereq_ansible.yml)
-> **브로커는 K8s 의 Strimzi 가 소유합니다. 이 두 플레이북은 컷오버 선행 단계입니다.**
-- **승계 주체는 Terraform 저장소 `105-strimzi`(Operator + CRD) + `301-kafka`(Kafka/KafkaNodePool/KafkaTopic CR)** 입니다.
-- 구 설계와 달라진 점 셋:
-  - 브로커가 **hostNetwork 를 벗었습니다**(Strimzi 미지원) → 노드 포트 9092/9093/9094 를 쓰지 않고 클러스터 내부 리스너 하나만 씁니다.
-  - 데이터가 hostPath 가 아니라 **정적 local PV** 입니다 — `/data/kafka-broker` · `/data/kafka-controller`.
-  - **컨트롤러 3 + 브로커 3** 으로 역할이 갈렸습니다(node id 100~102 / 0~2). 브로커 번호는 구 systemd `node.id` 승계라 메트릭 시계열이 이어집니다.
-- `kafka_remove_ansible.yml` — 유닛·설정·설치 디렉토리·**데이터(/data/kafka, 복구 불가)**·kafka 계정 제거 (멱등 — 재실행 안전)
-- `kafka_prereq_ansible.yml` — local PV 디렉토리 2종 생성 + 권한/경로충돌 검증 (멱등)
-- **실행 순서: remove → prereq → `helm install strimzi 105-strimzi` → `helm install kafka 301-kafka`**
-- ⚠ `kafka_remove` 가 지우는 `/data/kafka` 와 새 PV 경로가 **겹치지 않는 것이 안전장치**입니다 — 겹치면 롤 재실행 한 번이 전 노드 데이터를 동시에 지웁니다. `kafka_prereq` 의 assert 와 `301-kafka/values.schema.json` 의 `not` 패턴이 양쪽에서 막습니다.
-- ⚠ 포트가 겹치지 않으므로 '공존 불가' 근거는 사라졌지만 remove 를 먼저 하는 이유는 남습니다 — 브로커가 둘로 갈리면 클라이언트가 어느 쪽에 붙었는지 알 수 없습니다.
-- 토픽은 301-kafka 의 KafkaTopic CR 이, 브로커↔노드 고정표는 같은 차트 values 의 `kafka.nodes` 가 승계
+### 특정 Role만 다시 실행
+
+```bash
+ansible-playbook ubuntu_ansible.yml --tags etc_hosts
+```
 
 ---
 </br>
 
 
-## 📜 MinIO 제거·드라이브 선행작업 플레이북 (minio_remove_ansible.yml / minio_ansible.yml)
-> **구 로컬(systemd) MinIO 를 걷어내고, K8s MinIO 가 쓸 드라이브만 남기는 컷오버 한 쌍입니다.**
-- **서버는 Terraform 저장소 `304-minio`(Helm, 노드 고정 StatefulSet — hostNetwork + hostPath)가 승계**했습니다
-  — 포트(9000/9001)·드라이브 경로(/data/minio/diskN)·이레이저 구성(3노드×2드라이브) 동일.
-- `minio_remove_ansible.yml`: 유닛·설정·바이너리·계정과 **드라이브 내용물(복구 불가)**을 제거합니다
-  (멱등 — 유닛 존재 가드라 컷오버 후 재실행해도 K8s 데이터를 지우지 않습니다).
-  **⚠️ 새 서버가 같은 호스트 포트를 쓰므로 `304-minio` helm install 전에 반드시 먼저 실행**
-- `minio_ansible.yml`(`minio_prereq` 롤): 드라이브(루프 이미지 마운트)만 준비합니다 — longhorn_prereq 와
-  같은 성격의 노드 선행작업. 드라이브 자체는 제거 대상이 아니며 304-minio 가 hostPath 로 이어받습니다.
-- 버킷 생성·시드 주입은 304-minio 차트의 init Job 이, 루트 자격증명은 300-data-layer-base 의 공용 Secret 이 승계
+## 📜 Longhorn 플레이북 (`longhorn_ansible.yml`)
+
+> **Longhorn을 설치하기 전에 각 Kubernetes 노드를 미리 준비하는 플레이북입니다.**
+
+---
+
+### 주요 역할
+
+- `ap / s1 / s2` 노드에 **Longhorn 필수 환경 구성**
+  - `open-iscsi` 설치 및 버전 고정
+  - `iscsid` 실행
+  - `multipathd` 비활성화
+  - Longhorn 데이터 디렉토리 생성
+- 마지막에 **필수 설정이 정상인지 검증**
+
+---
+
+### 주의사항
+
+- 설정값은 `group_vars/longhorn.yml`에서 관리
+  - `open_iscsi_version` → iSCSI 버전
+  - `longhorn_data_path` → Longhorn 데이터 저장 경로
+- `longhorn_data_path`는 **Longhorn의 `defaultDataPath`와 동일해야 함**
+- 데이터 경로는 **디렉토리만 생성**하며, 전용 디스크 마운트는 별도로 구성
+- 이 플레이북은 **노드 준비까지만 담당**하며, Longhorn 설치는 별도로 진행
+
+---
+</br>
+
+## 📜 Terraform 플레이북 (`terraform_ansible.yml`)
+
+> **Terraform을 설치하고 버전을 고정하는 플레이북입니다.**
+
+---
+
+### 주요 역할
+
+- `s2` 배포용 머신에 **Terraform 설치**
+- HashiCorp 저장소 등록
+- 지정된 Terraform 버전 설치 및 **버전 고정(hold)**
+- 설치 후 버전 정상 여부 검증
+
+---
+
+### 주의사항
+
+- 대상 서버는 `host.yml`에서 관리
+- Terraform 버전은 `group_vars/terraform.yml`의 `terraform_version`으로 관리
+- `terraform_version`은 **APT 패키지 버전 형식**을 사용
+  - 예: `1.15.8-1`
+- Ubuntu 24.04라면 HashiCorp 저장소 suite는 **`noble`**
+- 설치 가능한 버전 확인: `apt-cache madison terraform`
+
+---
+</br>
+
+## 📜 Helm 플레이북 (`helm_ansible.yml`)
+
+> **배포용 머신에 Helm CLI를 설치하는 플레이북입니다.**
+
+---
+
+### 주요 역할
+
+- `s2` 배포용 머신에 **Helm 설치**
+- 공식 `Helm CDN`에서 바이너리 다운로드
+- `SHA256` 체크섬으로 파일 검증
+- `/usr/local/bin/helm`에 설치 및 버전 고정
+
+---
+
+### 주의사항
+
+- 버전 / 체크섬 / 설치 경로는 `group_vars/helm.yml`에서 관리
+  - `helm_version`
+  - `helm_sha256`
+  - `helm_install_root`
+- **Helm 버전을 변경하면 `helm_sha256`도 함께 변경**
+- APT 저장소가 아닌 **공식 바이너리 방식으로 설치**
+- Helm CLI만 설치하며 **kubeconfig는 자동으로 설정하지 않음**
+- `s2`에서 Helm을 사용하려면 처음 한 번 **`ap`의 kubeconfig를 `s2`로 복사**해야 함
+
+---
+</br>
+
+## 📜 Kafka 플레이북 (`kafka_prereq_ansible.yml`)
+
+> **Kafka 브로커는 Kubernetes의 Strimzi가 관리하고, 이 플레이북은 Kafka가 사용할 노드의 저장공간만 미리 준비합니다.**
+
+---
+
+### 주요 역할
+
+- `ap / s1 / s2`에 `Kafka`용 디렉토리 생성
+  - `/data/kafka-controller` → KRaft 컨트롤러 데이터
+  - `/data/kafka-broker` → Kafka 토픽 로그
+- 디렉토리의 **소유자와 권한을 검증**
+- 경로 / 소유 / 권한은 `group_vars/kafka.yml`에서 관리
+
+---
+
+### 주의사항
+
+- 디렉토리 권한은 **`0770`이 중요**
+  - Strimzi Kafka 컨테이너가 비루트 사용자로 실행되므로 그룹 쓰기 권한이 필요함
+  - 권한이 없으면 Kafka가 디렉토리를 생성하지 못해 `CrashLoopBackOff`가 발생할 수 있음
+
+- **설치 순서**
+```text
+kafka_prereq
+    ↓
+105-strimzi (Operator)
+    ↓
+301-kafka (Kafka)
+```
+
+- **[중요] 노드를 추가할 때도 반드시 이 플레이북을 먼저 실행**
+  - **디렉토리 준비 없이 Kafka 노드만 추가하면 PV 마운트에 실패할 수 있음**
+- Kafka 설정과 토픽은 `301-kafka`에서 관리
+  - `kafka.nodes` → 브로커와 노드 배치
+  - `KafkaTopic` → **Kafka 토픽**
+
+---
+</br>
+
+## 📜 BuildKit 플레이북 (`buildkitd_ansible.yml`)
+
+> **Docker 없이 컨테이너 이미지를 빌드하고 Harbor에 Push하기 위한 BuildKit 환경을 구성합니다.**
+
+---
+
+### 주요 역할
+
+- `s2` 빌드 머신에 **BuildKit 설치**
+- `runc` 설치 여부 확인 및 필요 시 설치
+- BuildKit 데몬(`buildkitd`)을 **systemd 서비스로 등록·실행**
+- `buildctl` 명령어 설치
+- Harbor Push를 위한 인증 정보 설정
+- 설치 및 서비스 상태 검증
+
+---
+
+### 주의사항
+
+- 버전 / 설치 경로 / Harbor 인증 정보는 `group_vars/buildkitd.yml`에서 관리
+- BuildKit은 버전별 디렉토리에 설치하고 **심볼릭 링크만 변경**
+  - 버전 변경 및 롤백이 간단함
+- `buildkit_registry_password`는 Harbor 관리자 비밀번호와 **동일해야 함**
+- `buildkit_registry`에는 **`:80` 포트를 반드시 포함**
+  - 예: `harbor.example.com:80`
+  - 빠지면 Docker Hub로 잘못 Push될 수 있음
+- Harbor는 **HTTP 환경**
+  - 이 플레이북은 인증 정보만 설정
+  - 수동 `buildctl` Push 시 `registry.insecure=true` 필요
+- BuildKit 설치와 Harbor 설치는 별개지만, **이미지 Push는 Harbor 설치 후 가능**
+- BuildKit 소켓이 root 전용이므로 `buildctl`은 **root 권한으로 실행**
+
+---
+</br>
+
+
+## 📜 K8s 플레이북 (`k8s_ansible.yml`)
+
+> **kubeadm + containerd + Calico 기반의 Kubernetes 클러스터를 구성하는 플레이북입니다.**
+
+---
+
+### 주요 역할
+- `Kubernetes` 노드 사전 준비
+  - `k8s_prereq`
+  - `containerd`
+  - `k8s_packages`
+- **Control Plane 초기화**
+- **Calico 네트워크 구성**
+- Worker Node를 → 클러스터에 **Join**
+- 마지막에 클러스터 상태 검증
+
+---
+
+### 실행 전
+
+- 반드시 **`ubuntu_ansible.yml`을 먼저 실행**
+- 특히 Swap이 활성화되어 있어야 함
+  - Kubernetes Role의 검증 과정에서 `/swap.img` 활성 여부를 확인함
+
+---
+
+### 주의사항
+
+- `Kubernetes/containerd/runc/Calico` 버전과 네트워크 설정은
+  `group_vars/kubernetes.yml`에서 관리
+- `kubeadm init/join`은 **1회성 작업**
+  - `pod_subnet` 등을 변경해도 재실행만으로 반영되지 않음
+  - 클러스터를 다시 구성하려면 `k8s_reset`으로 기존 클러스터를 먼저 제거
+
+- `collection_check`는 **설치가 아니라 존재 여부만 확인**
+  - 없으면 직접 설치: `ansible-galaxy collection install ansible.posix community.general`
+- `containerd`와 `runc`는 **호환되는 버전으로 함께 설치/고정**
+  - 버전을 변경한 경우 노드 재부팅 필요
+  - 운영 중인 클러스터에서는 `--limit`으로 **한 노드씩 순차 적용 권장**
 
 ---
 </br>
@@ -732,14 +880,14 @@ class CallbackModule(CallbackBase):
 
 1. 작업 목적 주석 작성
 2. **Ansible Module을 사용하여 작업 수행 (멱등성 유지)**
-3. 필요한 경우 `command` 또는 `shell`로 동작 확인
-4. **`assert`를 이용하여 결과 검증**
-5. 실패 시 즉시 Playbook 종료
+   - 필요한 경우 `command` 또는 `shell`로 동작 확인
+3. **`assert`를 이용하여 결과 검증**
+4. 실패 시 즉시 `Playbook` 종료
 
 ---
 
 ### 2. 주석 작성
-> 섹션을 구분하는 주석을 사용한다.
+> **섹션을 구분하는 주석을 사용한다.**
 
 ```yaml
 # =====================================================
@@ -750,6 +898,7 @@ class CallbackModule(CallbackBase):
 # 1. sshpass 설치
 # sshpass → SSH 비밀번호 인증 자동화를 위한 도구
 # -----------------------------------------------------
+...
 ```
 
 ---
@@ -758,7 +907,7 @@ class CallbackModule(CallbackBase):
 
 > **가능한 모든 작업은 `Ansible Module`을 사용한다.**
 
-✔ 권장
+#### ✔ 권장
 
 ```yaml
 apt:
@@ -766,7 +915,7 @@ apt:
   state: present
 ```
 
-❌ 비권장
+#### ❌ 비권장
 
 ```yaml
 shell: apt install -y sshpass
@@ -786,8 +935,8 @@ assert:
     - sshpass_check.rc == 0
 ```
 
-- 성공 → 다음 Task 실행
-- 실패 → Playbook 즉시 종료(Fail Fast)
+- 성공 → 다음 `Task` 실행
+- 실패 → `Playbook` 즉시 종료(`Fail Fast`)
 
 `success_msg`와 `fail_msg`를 함께 작성한다.
 
@@ -800,17 +949,29 @@ fail_msg: "[FAIL] sshpass install failed"
 </br>
 
 ## 📚 Roles 설명
+> **롤 33종 → 플레이북 실행 순서대로 정리했습니다.**
+
+- 변수로 동작이 갈리는 롤은 그 값이 `group_vars/<그룹>.yml` 에 있고
+- 나머지는 값이 롤 안에 고정돼 있습니다. `disable_swap`·`k8s_reset` 둘은 평소 주석 상태(의도된 비활성)입니다.
+
 ---
+</br>
+
+## **▸ `ubuntu_ansible.yml` → Control Node + 운영 서버 Configuration (롤 20개)**
+- Control Node 1 + Ubuntu_Servers 19 + 주석 처리된 `disable_swap`
+
+---
+
 ### 🔹 control → [`📂 control.md`](./roles/control/tasks/control.md)
 - Control Node에서 password 기반 SSH 통신을 위해 sshpass 설치 및 검증 수행
 ---
 
 ### 🔹 root_password → [`📂 root_password.md`](./roles/root_password/tasks/root_password.md)
-- root 계정 비밀번호 설정
+- root 계정 비밀번호 설정 (`group_vars/Ubuntu_Servers.yml` 의 `root_password` 기준)
 ---
 
 ### 🔹 packages → [`📂 packages.md`](./roles/packages/tasks/packages.md)
-- 기본 패키지 일괄 설치 (인벤토리 `install_packages` 기준)
+- 기본 패키지 일괄 설치 (`group_vars/Ubuntu_Servers.yml` 의 `install_packages` 기준)
 ---
 
 ### 🔹 nicname → [`📂 nicname.md`](./roles/nicname/tasks/nicname.md)
@@ -818,7 +979,7 @@ fail_msg: "[FAIL] sshpass install failed"
 ---
 
 ### 🔹 cloud_init → [`📂 cloud_init.md`](./roles/cloud_init/tasks/cloud_init.md)
-- cloud-init 설정 (초기화 간섭 방지)
+- cloud-init 비활성화 — 부팅 시 네트워크/hostname 을 되돌리는 간섭 차단
 ---
 
 ### 🔹 ufw → [`📂 ufw.md`](./roles/ufw/tasks/ufw.md)
@@ -826,7 +987,7 @@ fail_msg: "[FAIL] sshpass install failed"
 ---
 
 ### 🔹 locale_ko → [`📂 locale_ko.md`](./roles/locale_ko/tasks/locale_ko.md)
-- 한국어 로케일 설정
+- 한국어 로케일 설정 (ko_KR.UTF-8 — 새 로그인 세션부터 적용)
 ---
 
 ### 🔹 ssh_root_login → [`📂 ssh_root_login.md`](./roles/ssh_root_login/tasks/ssh_root_login.md)
@@ -838,39 +999,39 @@ fail_msg: "[FAIL] sshpass install failed"
 ---
 
 ### 🔹 ntp → [`📂 ntp.md`](./roles/ntp/tasks/ntp.md)
-- NTP 시간 동기화 설정 (`0.kr.pool.ntp.org`)
+- NTP 시간 동기화 설정 (systemd-timesyncd, `0.kr.pool.ntp.org`)
 ---
 
 ### 🔹 open_files → [`📂 open_files.md`](./roles/open_files/tasks/open_files.md)
-- open files(ulimit) 제한 설정
+- open files(ulimit `nofile`) 제한 상향
 ---
 
 ### 🔹 logrotate → [`📂 logrotate.md`](./roles/logrotate/tasks/logrotate.md)
-- 로그 로테이션 설정
+- 로그 로테이션 설정 (`group_vars/Ubuntu_Servers.yml` 의 `logrotate_options` 기준)
 ---
 
 ### 🔹 shell_default → [`📂 shell_default.md`](./roles/shell_default/tasks/shell_default.md)
-- 기본 쉘 설정 (`/bin/sh` → bash)
+- 기본 쉘 설정 (`/bin/sh` → bash, 심볼릭 링크 직접 교체)
 ---
 
 ### 🔹 java → [`📂 java.md`](./roles/java/tasks/java.md)
-- OpenJDK 설치 (인벤토리 `java_version` 기준)
+- OpenJDK 설치 (`group_vars/Ubuntu_Servers.yml` 의 `java_version` 기준)
 ---
 
 ### 🔹 disable_swap → [`📂 disable_swap.md`](./roles/disable_swap/tasks/disable_swap.md)
-- 스왑 비활성화 — ⚠ **평소 플레이북에서 주석 상태**. K8s 를 스왑 켠 채(LimitedSwap) 운영하므로 활성화하면 K8s 검증이 실패한다
+- 스왑 비활성화 → **평소 플레이북에서 주석 상태**. K8s 를 스왑 켠 채(LimitedSwap) 운영하므로 활성화하면 K8s 검증이 실패한다
 ---
 
 ### 🔹 enable_swap → [`📂 enable_swap.md`](./roles/enable_swap/tasks/enable_swap.md)
-- 스왑 파일 생성 및 활성화 (인벤토리 `swap_file_path`, `swap_size_mb` 기준)
+- 스왑 파일 생성 및 활성화 (`group_vars/Ubuntu_Servers.yml` 의 `swap_file_path`, `swap_size_mb` 기준 → 크기를 바꾸면 파일을 재생성한다)
 ---
 
 ### 🔹 package_version_lock → [`📂 package_version_lock.md`](./roles/package_version_lock/tasks/package_version_lock.md)
-- 커널·Java 패키지 버전 고정 (hold) — `java_version` 기준이라 java 롤 뒤에 와야 한다
+- 커널/Java 패키지 버전 고정(hold) → `java_version` 기준이라 java 롤 뒤에 와야 한다
 ---
 
 ### 🔹 package_update_lock → [`📂 package_update_lock.md`](./roles/package_update_lock/tasks/package_update_lock.md)
-- 자동 업데이트 잠금
+- 자동 업데이트 잠금 (unattended-upgrades + 주기적 목록 갱신 차단)
 ---
 
 ### 🔹 bash_common → [`📂 bash_common.md`](./roles/bash_common/tasks/bash_common.md)
@@ -878,32 +1039,38 @@ fail_msg: "[FAIL] sshpass install failed"
 ---
 
 ### 🔹 ssh_keygen → [`📂 ssh_keygen.md`](./roles/ssh_keygen/tasks/ssh_keygen.md)
-- Ed25519 키 생성 + 전 노드 공개키 상호 배포 (노드 간 비밀번호 없는 SSH)
+- Ed25519 키 생성 + 전 노드 공개키 상호 배포 (노드 간 비밀번호 없는 `SSH`)
 ---
 
 ### 🔹 etc_hosts → [`📂 etc_hosts.md`](./roles/etc_hosts/tasks/etc_hosts.md)
-- /etc/hosts 호스트 등록
+- `/etc/hosts` 를 인벤토리 호스트 목록 + `group_vars/Ubuntu_Servers.yml` 기준으로 **통째로 재생성** → 노드 IP 계열(`data_layer_dns_names`)과 인그레스 VIP 계열(`data_layer_vip_dns_names` → `ingress_vip`) 두 갈래로 등록
+
+---
+</br>
+
+## **▸ `k8s_ansible.yml` → 클러스터 구성 (롤 6개 + 해체용 `k8s_reset`)**
+
 ---
 
 ### 🔹 collection_check → [`📂 collection_check.md`](./roles/collection_check/tasks/collection_check.md)
-- k8s 롤에 필요한 Ansible 컬렉션 사전 검증 (인벤토리 `required_collections` 기준) — **검증만 하고 설치하지 않는다**(없으면 `ansible-galaxy collection install`)
+- k8s 롤에 필요한 Ansible 컬렉션 사전 검증 (`group_vars/kubernetes.yml` 의 `required_collections` 기준) → **검증만 하고 설치하지 않는다** (없으면 `ansible-galaxy collection install`)
 ---
 
 ### 🔹 k8s_prereq → [`📂 k8s_prereq.md`](./roles/k8s_prereq/tasks/k8s_prereq.md)
-- K8s 사전 준비 — 커널 모듈(overlay/br_netfilter) + sysctl + cgroup v2 검증
+- K8s 사전 준비 → 커널 모듈(overlay/br_netfilter) + sysctl + cgroup v2 검증 (스왑은 끄지 않는다)
 ---
 
 ### 🔹 containerd → [`📂 containerd.md`](./roles/containerd/tasks/containerd.md)
-- 컨테이너 런타임 containerd + runc 설치·버전 고정 + SystemdCgroup 활성화 + HTTP 사설 레지스트리 허용(certs.d) + 파드 샌드박스(pause) 이미지 사전 확보 (인벤토리 `containerd_version`, `runc_version`, `containerd_insecure_registries`, `sandbox_image` 기준)
-
+- 컨테이너 런타임 containerd + runc 설치 (버전 고정) + SystemdCgroup 활성화 + HTTP 사설 레지스트리 허용(certs.d) + 파드 샌드박스(pause) 이미지 사전 확보 (`group_vars/kubernetes.yml` 의 `containerd_version`, `runc_version`, `containerd_insecure_registries`, `sandbox_image` 기준)
+- **[주의]** `containerd / runc` 는 **짝 버전**으로 함께 설치 + hold 한다(짝이 깨지면 파드가 Terminating 에서 안 사라짐). 버전 변경 후에는 노드 재부팅 필요
 ---
 
 ### 🔹 k8s_packages → [`📂 k8s_packages.md`](./roles/k8s_packages/tasks/k8s_packages.md)
-- kubeadm/kubelet/kubectl 설치·버전 고정 + node-ip 고정 (인벤토리 `kubernetes_package_version` 기준)
+- pkgs.k8s.io 저장소 등록 + kubeadm/kubelet/kubectl 설치 (버전 고정) + node-ip 고정 (`group_vars/kubernetes.yml` 의 `kubernetes_version`, `kubernetes_package_version` 기준)
 ---
 
 ### 🔹 k8s_master → [`📂 k8s_master.md`](./roles/k8s_master/tasks/k8s_master.md)
-- 컨트롤플레인 초기화(kubeadm init) + Calico 설치 → 스왑 유지(LimitedSwap) 구성
+- 컨트롤플레인 초기화(kubeadm init) + Calico 설치 → 스왑 유지(LimitedSwap) 구성. `admin.conf` 는 마스터의 `kubernetes_admin_user` 홈에만 배포된다
 ---
 
 ### 🔹 k8s_worker → [`📂 k8s_worker.md`](./roles/k8s_worker/tasks/k8s_worker.md)
@@ -911,35 +1078,38 @@ fail_msg: "[FAIL] sshpass install failed"
 ---
 
 ### 🔹 k8s_reset → [`📂 k8s_reset.md`](./roles/k8s_reset/tasks/k8s_reset.md)
-- 클러스터 해체(kubeadm reset) + 잔여물 정리 → 평소 주석 상태, 해체 시에만 활성화
+- 클러스터 해체(kubeadm reset) + 잔여물 정리 → 평소 주석 상태, 해체 시에만 활성화 (패키지 / 스왑은 남긴다)
+
+---
+</br>
+
+## **▸ 노드 선행작업 / 도구 설치 (플레이북 1개당 롤 1개)**
+- `longhorn_ansible.yml`
+- `terraform_ansible.yml`
+- `helm_ansible.yml`
+- `kafka_prereq_ansible.yml`
+- `buildkitd_ansible.yml`
+
 ---
 
 ### 🔹 longhorn_prereq → [`📂 longhorn_prereq.md`](./roles/longhorn_prereq/tasks/longhorn_prereq.md)
-- Longhorn 노드 사전 준비 → open-iscsi 설치·버전 고정 + multipathd 차단 + 데이터 경로 생성 (인벤토리 `open_iscsi_version`, `longhorn_data_path` 기준)
+- Longhorn 노드 사전 준비 → open-iscsi 설치/버전 고정 + multipathd 차단 + 데이터 경로 생성 (`group_vars/longhorn.yml` 의 `open_iscsi_version`, `longhorn_data_path` 기준)
 ---
 
 ### 🔹 terraform → [`📂 terraform.md`](./roles/terraform/tasks/terraform.md)
-- HashiCorp 저장소 등록 + Terraform 설치·버전 고정 (인벤토리 `terraform_version` 기준)
+- HashiCorp 저장소 등록 + Terraform 설치/버전 고정 (`group_vars/terraform.yml` 의 `terraform_version` 기준)
 ---
 
 ### 🔹 helm → [`📂 helm.md`](./roles/helm/tasks/helm.md)
-- Helm CLI 설치 → 공식 CDN tarball + sha256 검증 + 버전 고정 링크(`/usr/local/bin/helm`) (인벤토리 `helm_version`, `helm_sha256` 기준)
+- Helm CLI 설치 → 공식 CDN tarball + sha256 검증 + 버전 고정 링크(`/usr/local/bin/helm`) (`group_vars/helm.yml` 의 `helm_version`, `helm_sha256` 기준)
 ---
 
-### 🔹 kafka_remove → [`📂 kafka_remove.md`](./roles/kafka_remove/tasks/kafka_remove.md)
-- 구 로컬(systemd) Kafka 제거 — 유닛/설정/데이터/계정까지, 멱등 → 브로커는 Terraform 301-kafka(Helm)가 승계, 같은 호스트 포트라 helm install 전에 선행 (경로는 리터럴 — group_vars/kafka.yml 은 함께 퇴역)
----
-
-### 🔹 minio_remove → [`📂 minio_remove.md`](./roles/minio_remove/tasks/minio_remove.md)
-- 구 로컬(systemd) MinIO 제거 — 유닛/설정/바이너리/계정 + 드라이브 내용물(가드 있는 멱등) → 서버는 Terraform 304-minio(Helm)가 승계, 같은 호스트 포트라 helm install 전에 선행. 드라이브(마운트)는 304 가 이어받으므로 남긴다
----
-
-### 🔹 minio_prereq → [`📂 minio_prereq.md`](./roles/minio_prereq/tasks/minio_prereq.md)
 ### 🔹 kafka_prereq → [`📂 kafka_prereq.md`](./roles/kafka_prereq/tasks/kafka_prereq.md)
-### 🔹 buildkitd → [`📂 buildkitd.md`](./roles/buildkitd/tasks/buildkitd.md)
-### 🔹 neo4j → [`📂 neo4j.md`](./roles/neo4j/tasks/neo4j.md)
-- 304-minio 가 hostPath 로 쓰는 드라이브 준비 — 루프 이미지 생성/포맷/마운트(fstab), 멱등 → longhorn_prereq 와 같은 성격의 노드 선행작업 (구 minio 롤의 드라이브 태스크만 존속한 것)
+- Strimzi(Terraform `301-kafka`)가 정적 local PV 로 쓰는 노드 디렉토리 2종 생성 + 권한 검증 → `/data/kafka-controller` + `/data/kafka-broker` (`group_vars/kafka.yml` 기준, 멱등)
+- **[주의]** 모드 `0770`(그룹 쓰기)이 없으면 Strimzi 파드가 CrashLoopBackOff. 브로커 설치 자체는 이 저장소 범위 밖이다
 ---
 
-
+### 🔹 buildkitd → [`📂 buildkitd.md`](./roles/buildkitd/tasks/buildkitd.md)
+- docker 없이 이미지를 빌드 + push 하는 BuildKit 데몬 설치 → buildkitd(systemd) + buildctl + Harbor push 인증 파일(`/root/.docker/config.json`) (`group_vars/buildkitd.yml` 기준)
+- **[주의]** `buildkit_registry_password` 는 Terraform 200-harbor 의 `harbor_admin_password` 와 글자 그대로 같아야 하고, push 는 200-harbor apply 이후에 가능하다
 ---

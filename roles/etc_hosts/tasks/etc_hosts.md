@@ -8,31 +8,14 @@
 
 ## 🧩 main.yml
 ```yaml
-# -----------------------------------------------------
+# =====================================================
 # /etc/hosts 생성 (인벤토리 기반 전체 관리)
-# -----------------------------------------------------
+# =====================================================
 
-# 1. /etc/hosts 생성 (copy: content 자체가 멱등 — 내용이 같으면 changed=0)
-#    → data-layer 이름은 두 그룹으로 나뉜다. 나눈 기준은 '장애 전환을 누가 하느냐'다.
-#
-#      ① data_layer_dns_names (노드 IP 계열) — 노드 수만큼 줄이 생긴다.
-#         이름 하나가 노드 IP 를 전부 A 레코드로 갖고, 죽은 노드로 먼저 붙으면
-#         클라이언트가 TCP 타임아웃 뒤 다음 IP 로 넘어간다. 즉 전환 주체가 클라이언트다.
-#         (glibc 가 여러 주소를 모두 반환하려면 /etc/host.conf 에 'multi on' 이 있어야 한다.
-#          Ubuntu 기본값이라 따로 설정하지 않지만, 꺼지면 첫 줄 하나만 반환되어 전환이 죽는다.)
-#         minio-console(304-minio 가 hostNetwork 로 각 노드 :9001 에 직접 연다)·
-#         neo4j(노드 로컬 systemd)는 인그레스를 안 끼는 노드 포트 직결이라 여기 남는다.
-#
-#      ② data_layer_vip_dns_names (VIP 계열) — 총 1줄이다.
-#         이름 전부가 인그레스 VIP 를 가리키고, 노드가 죽으면 MetalLB 가 VIP 를
-#         살아 있는 노드로 옮긴다. 전환 주체가 클라이언트가 아니라 클러스터라서
-#         타임아웃 대기가 없고, 이름별 구분은 인그레스가 Host 헤더로 한다.
-#         ⚠ harbor 가 여기 있는 것이 특별하다 — 이 이름은 사람이 치는 주소일 뿐 아니라
-#           '이미지 이름의 첫 마디'라서 containerd_insecure_registries 와
-#           Terraform 전 스택의 harbor_registry 가 이 문자열과 글자 그대로 같아야 한다.
-#
-#    ⚠ 한 이름을 두 그룹에 동시에 넣지 말 것 — 클라이언트가 노드 IP 와 VIP 중 아무 데나
-#      붙어서 증상이 접속할 때마다 달라진다.
+
+# -----------------------------------------------------
+# 1. /etc/hosts 생성 (copy: content 자체가 멱등 → 내용이 같으면 changed=0)
+# -----------------------------------------------------
 - name: "Create /etc/hosts from inventory"
   copy:
     dest: /etc/hosts
@@ -53,8 +36,9 @@
 
       {{ ingress_vip }} {{ data_layer_vip_dns_names | join(' ') }}
 
+
 # -----------------------------------------------------
-# /etc/hosts 설정 검증 (타겟 서버 파일에서 서버별 항목 확인)
+# 2. /etc/hosts 설정 검증 (타겟 서버 파일에서 서버별 항목 확인)
 # -----------------------------------------------------
 - name: "Check /etc/hosts entries"
   command: "grep -F '{{ hostvars[item].ansible_host }} {{ item }}' /etc/hosts"
@@ -72,9 +56,7 @@
   loop: "{{ hosts_check.results }}"
 
 # -----------------------------------------------------
-# data-layer DNS 이름 검증 ① 노드 IP 계열 (노드 IP 줄마다 이름이 '전부' 있는지 확인)
-# → 이름 하나만 빠져도 그 서비스만 조용히 접속 불가가 된다(다른 이름은 멀쩡하니 원인 추적이 어렵다).
-# → 한 줄이라도 빠지면 그 노드가 살아 있어도 클라이언트가 넘어갈 곳이 없어 HA 가 깨진다.
+# 3. data-layer DNS 이름 검증 (node 계열)
 # -----------------------------------------------------
 - name: "Check /etc/hosts data-layer DNS entries"
   command: "grep -F '{{ hostvars[item].ansible_host }} {{ data_layer_dns_names | join(' ') }}' /etc/hosts"
@@ -91,9 +73,9 @@
     fail_msg: "ERROR!.. | /etc/hosts DNS entry missing/incomplete: {{ hostvars[item.item].ansible_host }} {{ data_layer_dns_names | join(' ') }}"
   loop: "{{ dns_hosts_check.results }}"
 
-# 이름 출현 횟수까지 확인 — 기대값은 '이름 개수 × 노드 수'다.
-# 위 검증은 각 줄에 이름이 다 있는지만 보므로, 옛 이름이 남아 있거나 같은 이름이 다른 줄에
-# 중복 등록된 경우(=원하지 않는 IP 로 먼저 붙는 경우)를 잡지 못한다. 총량을 세면 드러난다.
+# -----------------------------------------------------
+# 4. 이름 출현 횟수까지 확인 → 기대값은 '이름 개수 × 노드 수'다.
+# -----------------------------------------------------
 - name: "Count /etc/hosts data-layer DNS name occurrences"
   shell: "grep -owE '{{ data_layer_dns_names | join('|') }}' /etc/hosts | wc -l"
   register: dns_hosts_count
@@ -108,11 +90,7 @@
     fail_msg: "ERROR!.. | data-layer DNS name occurrences={{ dns_hosts_count.stdout }} (expected {{ (data_layer_dns_names | length) * (groups['Ubuntu_Servers'] | length) }} = names {{ data_layer_dns_names | length }} x nodes {{ groups['Ubuntu_Servers'] | length }})"
 
 # -----------------------------------------------------
-# data-layer DNS 이름 검증 ② VIP 계열
-# → 위 검증과 태스크를 나눈 이유는 기대 개수가 다르기 때문이다. VIP 는 노드마다 반복하지
-#   않고 총 1줄이라 '이름 개수 × 노드 수'가 아니라 '이름 개수 × 1' 이다.
-#   두 그룹을 한 태스크로 합치면 이 산식이 조용히 틀어져 검증이 무의미해진다.
-# → 이 줄이 없으면 인그레스로 옮긴 서비스가 전부 접속 불가가 된다(이름이 안 풀린다).
+# 5. data-layer DNS 이름 검증 (VIP 계열)
 # -----------------------------------------------------
 - name: "Check /etc/hosts ingress VIP DNS entry"
   command: "grep -F '{{ ingress_vip }} {{ data_layer_vip_dns_names | join(' ') }}' /etc/hosts"
@@ -127,8 +105,9 @@
     success_msg: "Good!.. | /etc/hosts VIP entry present: {{ ingress_vip }} {{ data_layer_vip_dns_names | join(' ') }}"
     fail_msg: "ERROR!.. | /etc/hosts VIP entry missing/incomplete: {{ ingress_vip }} {{ data_layer_vip_dns_names | join(' ') }}"
 
-# VIP 계열 이름이 노드 IP 줄에도 중복 등록되면(=옛 설정 잔재) 클라이언트가 인그레스가
-# 아니라 노드 IP 로 먼저 붙어 접속이 실패한다. 총량이 이름 개수와 정확히 같아야 한다.
+# -----------------------------------------------------     
+# 6. 이름 출현 횟수까지 확인
+# -----------------------------------------------------
 - name: "Count /etc/hosts ingress VIP DNS name occurrences"
   shell: "grep -owE '{{ data_layer_vip_dns_names | join('|') }}' /etc/hosts | wc -l"
   register: vip_hosts_count

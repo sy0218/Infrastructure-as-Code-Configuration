@@ -1,8 +1,0 @@
-# -----------------------------------------------------
-# neo4j 재시작 핸들러 → neo4j.conf / systemd 드롭인 변경 시에만 실행
-# -----------------------------------------------------
-- name: restart neo4j
-  systemd:
-    name: neo4j
-    state: restarted
-    daemon_reload: true # 드롭인 변경분 반영

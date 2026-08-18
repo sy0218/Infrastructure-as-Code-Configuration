@@ -10,47 +10,60 @@
 
 ## 🧩 main.yml
 ```yaml
-# -----------------------------------------------------
+# =====================================================
 # 스왑(Swap) 파일 생성 및 활성화
-# -----------------------------------------------------
+# =====================================================
 # [주의] swap_size_mb 변경 시 스왑 파일을 재생성하여 크기를 수렴시킴
-#  - 활성 스왑이면 먼저 swapoff 후 재생성 — 메모리 사용량이 높은
-#    운영 장비에서는 swapoff가 오래 걸리거나 실패할 수 있으므로 주의
-# -----------------------------------------------------
+#   - 활성 스왑이면 먼저 swapoff 후 재생성 
+#   — 메모리 사용량이 높은 운영 장비에서는 swapoff가 오래 걸리거나 실패할 수 있으므로 주의
+# =====================================================
 
+
+# -----------------------------------------------------
 # 1. 스왑 파일 상태 확인 (stat 모듈 자체가 멱등)
+# -----------------------------------------------------
 - name: "Check swap file status"
   stat:
     path: "{{ swap_file_path }}"
   register: swap_file_stat
 
-# 2. 재생성 필요 여부 판단 — 파일이 없거나 크기가 목표(swap_size_mb)와 다르면 재생성
+# -----------------------------------------------------
+# 2. 재생성 필요 여부 판단 → 파일이 없거나 크기가 목표(swap_size_mb)와 다르면 재생성
+# -----------------------------------------------------
 - name: "Determine swap file rebuild"
   set_fact:
     swap_rebuild_needed: >-
       {{ not swap_file_stat.stat.exists
          or swap_file_stat.stat.size != (swap_size_mb | int) * 1024 * 1024 }}
 
-# 3. 활성 swap 사전 확인 (swapoff/swapon은 비멱등 — 상태 기반 게이팅용)
+# -----------------------------------------------------
+# 3. 활성 swap 사전 확인 (swapoff/swapon은 비멱등 → 상태 기반 게이팅용)
+# -----------------------------------------------------
 - name: "Check active swap"
   command: swapon --noheadings --show=NAME
   register: swap_active_check
   changed_when: false
 
+# -----------------------------------------------------
 # 4. 재생성 대상 스왑이 활성 상태면 먼저 끄기 (활성 상태의 스왑 파일은 재생성 불가)
+# -----------------------------------------------------
 - name: "Disable swap file before rebuild"
   command: "swapoff {{ swap_file_path }}"
   when:
     - swap_rebuild_needed | bool
     - swap_file_path in swap_active_check.stdout_lines
 
-# 5. 스왑 파일 (재)생성 — swap_size_mb 변경 시에도 여기서 목표 크기로 수렴
-#    (fallocate는 파일시스템에 따라 hole 문제로 swapon이 거부할 수 있어 dd 사용)
+# -----------------------------------------------------
+# 5. 스왑 파일 (재)생성 → swap_size_mb 변경 시에도 여기서 목표 크기로 수렴
+#    - (fallocate는 파일시스템에 따라 hole 문제로 swapon이 거부할 수 있어 dd 사용u)
+# -----------------------------------------------------
 - name: "Create swap file"
   command: "dd if=/dev/zero of={{ swap_file_path }} bs=1M count={{ swap_size_mb }}"
   when: swap_rebuild_needed | bool
 
+# -----------------------------------------------------
 # 6. 스왑 파일 권한 설정 (file 모듈 자체가 멱등)
+# -----------------------------------------------------
 - name: "Set swap file permissions"
   file:
     path: "{{ swap_file_path }}"
@@ -58,28 +71,36 @@
     group: root
     mode: "0600"
 
-# 7. 스왑 시그니처 사전 확인 (mkswap은 비멱등 — 시그니처 없을 때만 실행하도록 게이팅)
-#    (시그니처가 없으면 blkid가 rc=2를 반환 — 정상 케이스이므로 실패로 처리하지 않음.
+# -----------------------------------------------------
+# 7. 스왑 시그니처 사전 확인 (mkswap은 비멱등 → 시그니처 없을 때만 실행하도록 게이팅)
+#    (시그니처가 없으면 blkid가 rc=2를 반환 → 정상 케이스이므로 실패로 처리하지 않음.
 #     재생성 직후엔 시그니처가 없으므로 이 조건이 재생성 케이스도 포함)
+# -----------------------------------------------------
 - name: "Check swap signature"
   command: "blkid -o value -s TYPE {{ swap_file_path }}"
   register: swap_sig_check
   changed_when: false
   failed_when: swap_sig_check.rc not in [0, 2]
 
+# ----------------------------------------------------- 
 # 8. 스왑 시그니처가 없을 때만 포맷
+# -----------------------------------------------------
 - name: "Format swap file"
   command: "mkswap {{ swap_file_path }}"
   when: swap_sig_check.stdout | trim != "swap"
 
-# 9. 스왑 활성화 — 미활성 상태거나 재생성한 경우만 켜기
+# -----------------------------------------------------
+# 9. 스왑 활성화 → 미활성 상태거나 재생성한 경우만 켜기
+# -----------------------------------------------------
 - name: "Enable swap file"
   command: "swapon {{ swap_file_path }}"
   when: swap_rebuild_needed | bool
         or swap_file_path not in swap_active_check.stdout_lines
 
-# 10. fstab에 스왑 등록 — 재부팅 후에도 유지
-#     (lineinfile 자체가 멱등 — disable_swap이 주석 처리한 라인도 활성 라인으로 복원)
+# -----------------------------------------------------
+# 10. fstab에 스왑 등록 → 재부팅 후에도 유지
+#     - (lineinfile 자체가 멱등 → disable_swap이 주석 처리한 라인도 활성 라인으로 복원)
+# -----------------------------------------------------
 - name: "Persist swap in /etc/fstab"
   lineinfile:
     path: /etc/fstab
@@ -87,7 +108,7 @@
     line: "{{ swap_file_path }} none swap sw 0 0"
 
 # -----------------------------------------------------
-# Swap 활성화 검증
+# 11. Swap 활성화 검증
 # -----------------------------------------------------
 - name: "Check active swap devices"
   command: swapon --noheadings --show=NAME

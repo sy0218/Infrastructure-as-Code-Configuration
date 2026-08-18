@@ -7,11 +7,14 @@
 
 ## 🧩 main.yml
 ```yaml
-# -----------------------------------------------------
+# =====================================================
 # 시스템 공통 Bash 환경 설정
-# -----------------------------------------------------
+# =====================================================
 
-# 1. project 환경변수 파일 생성 (copy 자체가 멱등 — 경로/변수는 host.yml에서 관리)
+
+# -----------------------------------------------------
+# 1. project 환경변수 파일 생성 (copy 자체가 멱등 → 경로/변수는 host.yml에서 관리)
+# -----------------------------------------------------
 - name: "Create project env file from inventory variables"
   copy:
     dest: "{{ project_conf_path }}"
@@ -24,7 +27,7 @@
       {% endfor %}
 
 # -----------------------------------------------------
-# 2. bashrc 에 공통 설정 적용 (blockinfile 자체가 멱등 — 대상은 host.yml의 bashrc_targets)
+# 2. bashrc 에 공통 설정 적용 (blockinfile 자체가 멱등 → 대상은 host.yml의 bashrc_targets)
 # -----------------------------------------------------
 - name: "Apply common bash settings to system targets"
   blockinfile:
@@ -36,11 +39,6 @@
           source {{ project_conf_path }}
       fi
 
-      # Bash completion — 로그인 셸은 패키지의 /etc/profile.d/bash_completion.sh 가 이미 켠다.
-      # 비로그인 인터랙티브 셸(sudo su / 중첩 bash)은 /etc/bash.bashrc·/root/.bashrc 스탠자가
-      # 주석 배포라 안 켜진다 → 그 구멍만 이 블록이 메운다.
-      # VERSINFO 가드는 배포판 관용구 그대로 — 이미 로드한 대상(/etc/skel/.bashrc)의 중복 로드를 막는다
-      # (완성 스크립트에 재진입 가드가 없어 두 번 source 하면 76KB 를 통째로 다시 읽는다)
       if [ -z "${BASH_COMPLETION_VERSINFO-}" ] && [ -f /usr/share/bash-completion/bash_completion ]; then
           source /usr/share/bash-completion/bash_completion
       fi

@@ -9,18 +9,13 @@
 
 ## 🧩 main.yml
 ```yaml
-# -----------------------------------------------------
+# =========================================================================
 # BuildKit 설치 → buildkitd(systemd) + buildctl
-# -----------------------------------------------------
+# =========================================================================
 
-# =========================================================================
-# 1. runc 설치 (state=present 자체가 멱등 — 없으면 설치, 있으면 그대로)
-#    → buildkitd OCI 워커의 실행기다. 없으면 데몬은 떠도 첫 빌드가 죽는다.
-#    ⚠ 버전을 지정하지 않는 이유: K8s 노드에는 containerd 롤이 containerd·runc 를
-#      짝 버전으로 설치·hold 해 뒀다(짝이 어긋나면 Ubuntu 버그 #2065423).
-#      present 는 이미 설치된(hold 포함) 패키지를 건드리지 않아 그 계약과 충돌하지
-#      않고, runc 가 정말 없는 호스트에서만 배포판 runc 가 새로 깔린다.
-# =========================================================================
+# -----------------------------------------------------
+# 1. runc 설치 (state=present 자체가 멱등 → 없으면 설치, 있으면 그대로)
+# -----------------------------------------------------
 - name: "Install runc if missing"
   apt:
     name: runc
@@ -30,9 +25,9 @@
   delay: 10
   until: buildkit_runc is succeeded
 
-# =========================================================================
+# -----------------------------------------------------
 # 2. 버전별 설치 디렉토리 (file 모듈 자체가 멱등)
-# =========================================================================
+# -----------------------------------------------------
 - name: "Create buildkit install directory"
   file:
     path: "{{ buildkit_install_root }}/v{{ buildkit_version }}"
@@ -41,9 +36,9 @@
     group: root
     mode: '0755'
 
-# =========================================================================
+# -----------------------------------------------------
 # 3. 릴리스 tarball 다운로드 (파일명에 버전 포함 → 버전 변경 시에만 새로 받음)
-# =========================================================================
+# -----------------------------------------------------
 - name: "Download buildkit release tarball"
   get_url:
     url: "https://github.com/moby/buildkit/releases/download/v{{ buildkit_version }}/buildkit-v{{ buildkit_version }}.linux-amd64.tar.gz"
@@ -56,9 +51,9 @@
   delay: 10
   until: buildkit_tgz is succeeded
 
-# =========================================================================
+# -----------------------------------------------------
 # 4. 압축 해제 (creates 가드로 멱등) → v<버전>/bin/{buildkitd,buildctl}
-# =========================================================================
+# -----------------------------------------------------
 - name: "Extract buildkit binaries"
   unarchive:
     src: "{{ buildkit_install_root }}/buildkit-v{{ buildkit_version }}.linux-amd64.tar.gz"
@@ -66,9 +61,9 @@
     remote_src: true
     creates: "{{ buildkit_install_root }}/v{{ buildkit_version }}/bin/buildkitd"
 
-# =========================================================================
+# -----------------------------------------------------
 # 5. 심볼릭 링크 (버전 변경 시 링크만 교체되어 롤백이 쉽다)
-# =========================================================================
+# -----------------------------------------------------
 - name: "Link buildkit binaries into PATH"
   file:
     src: "{{ buildkit_install_root }}/v{{ buildkit_version }}/bin/{{ item }}"
@@ -80,10 +75,10 @@
     - buildctl
   notify: restart buildkitd
 
-# =========================================================================
+# -----------------------------------------------------
 # 6. systemd 유닛 (copy 자체가 멱등)
 #    → 소켓은 기본값(/run/buildkit/buildkitd.sock, root 전용)을 그대로 쓴다.
-# =========================================================================
+# -----------------------------------------------------
 - name: "Create buildkitd systemd unit"
   copy:
     dest: /etc/systemd/system/buildkitd.service
@@ -106,11 +101,9 @@
       WantedBy=multi-user.target
   notify: restart buildkitd
 
-# =========================================================================
+# -----------------------------------------------------
 # 7. Harbor push 인증 파일 (copy 자체가 멱등)
-#    → buildctl 은 docker CLI 없이 이 파일의 auths 만 읽는다(root 로 실행하므로 /root).
-#    ⚠ 비밀번호는 200-harbor secrets.auto.tfvars 의 harbor_admin_password 와 같아야 한다.
-# =========================================================================
+# -----------------------------------------------------
 - name: "Create docker config directory"
   file:
     path: /root/.docker
@@ -124,12 +117,12 @@
     dest: /root/.docker/config.json
     owner: root
     group: root
-    mode: '0600' # 자격증명 — root 만 읽는다
+    mode: '0600' # 자격증명 → root 만 읽는다
     content: "{{ {'auths': {buildkit_registry: {'auth': (buildkit_registry_user ~ ':' ~ buildkit_registry_password) | b64encode}}} | to_nice_json }}\n"
 
-# =========================================================================
+# -----------------------------------------------------
 # 8. 서비스 기동 + 부팅 자동시작 (systemd 모듈 자체가 멱등)
-# =========================================================================
+# -----------------------------------------------------
 - name: "Enable and start buildkitd"
   systemd:
     name: buildkitd
@@ -137,14 +130,14 @@
     state: started
     daemon_reload: true
 
-# =========================================================================
+# -----------------------------------------------------
 # 9. 유닛/바이너리 변경분을 검증 전에 반영한다
-# =========================================================================
+# -----------------------------------------------------
 - name: "Flush handlers before verification"
   meta: flush_handlers
 
 # -----------------------------------------------------
-# 검증
+# 10.검증
 # -----------------------------------------------------
 - name: "Check buildkitd service status"
   command: systemctl is-active buildkitd
@@ -160,7 +153,7 @@
   register: buildctl_version_check
   changed_when: false
 
-# 소켓으로 데몬에 실제 접속해 본다 — active 인데 소켓이 안 열리는 경우를 잡는다
+# 소켓으로 데몬에 실제 접속해 본다 → active 인데 소켓이 안 열리는 경우를 잡는다
 - name: "Check buildkitd responds on its socket"
   command: /usr/local/bin/buildctl debug info
   register: buildctl_debug
@@ -173,7 +166,7 @@
       - buildkitd_status.stdout == "active"
       - buildkit_version in buildctl_version_check.stdout # 고정 버전 일치 (조건문 안에서는 {{ }} 금지)
       - buildctl_debug.rc == 0
-    success_msg: "Good!.. | buildkitd active — buildctl v{{ buildkit_version }} ready (socket OK)"
+    success_msg: "Good!.. | buildkitd active → buildctl v{{ buildkit_version }} ready (socket OK)"
     fail_msg: "ERROR!.. | buildkitd NOT ready → 노드에서 journalctl -u buildkitd -n 50 확인"
 ```
 ---

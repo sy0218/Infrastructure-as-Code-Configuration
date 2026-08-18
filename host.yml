@@ -37,27 +37,12 @@ all:
       hosts:
         s2: # terraform 과 같은 배포 CLI 머신 (Helm 차트 스택 배포용)
 
-    # kafka 그룹은 로컬 PV 디렉토리 선행작업(kafka_prereq) 대상이다 — 브로커 자체는
-    # Terraform 저장소 301-kafka(Strimzi)로 이관됐고, 브로커↔노드 고정표는 그 values 의 kafka.nodes 다.
-    # 그룹이 존속하는 이유는 minio 와 같다: 롤이 group_vars(경로·권한)를 필요로 한다
-    # (변수가 없는 kafka_remove 는 Ubuntu_Servers 를 그대로 쓴다).
+    # kafka 그룹은 로컬 PV 디렉토리 선행작업(kafka_prereq) 대상이다
     kafka:
       hosts:
         ap:
         s1:
         s2:
-
-    # minio 그룹은 드라이브 선행작업(minio_prereq)·구 설치 제거(minio_remove) 대상이다.
-    # 서버 자체는 Terraform 저장소 304-minio(Helm)로 이관 — 파드↔노드 고정표는 그 values 의 minio.nodes.
-    minio:
-      hosts:
-        ap:
-        s1:
-        s2:
-
-    neo4j:
-      hosts:
-        ap:
 
     buildkitd:
       hosts:

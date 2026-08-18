@@ -1,19 +1,12 @@
 # =====================================================
 # Kafka 노드 선행작업 (Strimzi 로컬 PV 디렉토리)
 # =====================================================
-# ⚠ 브로커 설치 플레이북이 아니다 — Kafka 는 K8s(Terraform 저장소 301-kafka,
-#   Strimzi Operator)로 이관됐다. 이 플레이는 그 차트의 정적 local PV 가
-#   가리키는 노드 디렉토리만 준비한다 — minio_prereq·longhorn_prereq 와 같은
-#   성격의 노드 선행작업이다.
 #
-# 컷오버 순서:
-#   1) kafka_remove_ansible.yml   — 구 systemd 브로커 제거 (⚠ /data/kafka 삭제 — 백업 먼저)
-#   2) 이 플레이북                 — 로컬 PV 디렉토리 준비(멱등 — 있으면 변경 없음)
-#   3) helm install strimzi 105-strimzi   (Terraform 저장소 — 오퍼레이터 + CRD)
-#   4) helm install kafka 301-kafka       (Kafka CR / KafkaNodePool / KafkaTopic)
+# 이 플레이북의 범위는 디렉토리 준비까지다 (멱등 — 있으면 변경 없음).
+# Strimzi 오퍼레이터/Kafka 차트 설치는 엔지니어가 수동으로 한다.
 #
-# 노드를 늘릴 때도 이 플레이북이 먼저다 — 디렉토리 없이 301-kafka values 의
-# nodes 표에 추가하면 그 노드의 PV 가 마운트에 실패해 파드가 멈춘다(의도된 실패).
+# 노드를 늘릴 때도 이 플레이북이 먼저다
+# 디렉토리 없이 301-kafka values 의 nodes 표에 추가하면 그 노드의 PV 가 마운트에 실패해 파드가 멈춘다
 # =====================================================
 - name: "[ Kafka Prereq.. ]"
   hosts: kafka
@@ -21,4 +14,4 @@
   gather_facts: false
 
   roles:
-    - { role: kafka_prereq, tags: ['kafka_prereq'] } # 디렉토리 2종 생성 + 권한/경로충돌 검증
+    - { role: kafka_prereq, tags: ['kafka_prereq'] } # 디렉토리 2종 생성 + 권한 검증

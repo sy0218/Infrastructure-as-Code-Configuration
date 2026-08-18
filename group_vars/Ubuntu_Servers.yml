@@ -1,7 +1,7 @@
 # =======================================
 # Ansible 접속/권한 (모든 플레이 공통)
 # =======================================
-ansible_user: project
+ansible_user: jsy_project
 ansible_ssh_pass: "1234"
 ansible_become_password: "1234"
 
@@ -92,8 +92,6 @@ bashrc_targets:
   - /etc/skel/.bashrc
 
 # project 환경 변수
-# (KAFKA_HOME 은 브로커의 K8s 이관으로 퇴역 — CLI 는 kubectl exec 로 브로커 파드의
-#  /opt/kafka/bin 을 쓴다. 노드 반영은 ubuntu_ansible.yml --tags bash_common)
 project_envs:
   - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
   - PATH=$JAVA_HOME/bin:$PATH

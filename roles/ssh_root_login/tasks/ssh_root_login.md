@@ -9,8 +9,13 @@
 
 ## 🧩 main.yml
 ```yaml
+# =====================================================
+# SSH Root Login 허용 설정
+# =====================================================
+
+
 # -----------------------------------------------------
-# SSH 설정 (Root Login 허용)
+# 1. SSH 설정 (Root Login 허용)
 # -----------------------------------------------------
 - name: "Set SSH PermitRootLogin yes"
   lineinfile:
@@ -21,7 +26,7 @@
   notify: Reload sshd
 
 # -----------------------------------------------------
-# SSH 설정 검증 (타겟 서버 파일 확인 — lookup은 컨트롤 노드를 읽으므로 사용 금지)
+# 2. SSH 설정 검증 (타겟 서버 파일 확인 → lookup은 컨트롤 노드를 읽으므로 사용 금지)
 # -----------------------------------------------------
 - name: "Check PermitRootLogin setting"
   command: "grep '^PermitRootLogin' /etc/ssh/sshd_config"
@@ -56,7 +61,7 @@
 
 ## 🧩 handlers/main.yml
 ```yaml
-# Ubuntu의 SSH 유닛 이름은 ssh (sshd는 별칭 — 24.04 소켓 활성화 환경에선 못 찾음)
+# Ubuntu의 SSH 유닛 이름은 ssh (sshd는 별칭 → 24.04 소켓 활성화 환경에선 못 찾음)
 - name: Reload sshd
   systemd:
     name: ssh

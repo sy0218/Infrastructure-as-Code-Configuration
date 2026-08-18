@@ -7,32 +7,41 @@
 
 ## 🧩 main.yml
 ```yaml
-# -----------------------------------------------------
+# =====================================================
 # Korean Locale 설정
-# -----------------------------------------------------
+# =====================================================
 
+
+# -----------------------------------------------------
 # 1. 한국어 언어팩 설치 (apt 자체가 멱등)
+# -----------------------------------------------------
 - name: "Install Korean language package"
   apt:
     name: language-pack-ko
     state: present
     update_cache: yes
-    cache_valid_time: 3600 # 캐시가 1시간 이내면 update 생략 (매 실행 시간 절약)
+    cache_valid_time: 3600 # 캐시가 1시간 이내면 update 생략
 
-# 2. ko_KR.UTF-8 로케일 생성 (locale_gen 모듈 자체가 멱등 — command locale-gen은 매번 changed)
+# -----------------------------------------------------
+# 2. ko_KR.UTF-8 로케일 생성 (locale_gen 모듈 자체가 멱등)
+# -----------------------------------------------------
 - name: "Create ko_KR.UTF-8 locale"
   locale_gen:
     name: ko_KR.UTF-8
     state: present
 
-# 3. 시스템 기본 로케일을 한국어로 설정 (lineinfile 자체가 멱등 — command update-locale은 매번 changed)
+# -----------------------------------------------------
+# 3. 시스템 기본 로케일을 한국어로 설정 (lineinfile 자체가 멱등)
+# -----------------------------------------------------
 - name: "Set default language to Korean"
   lineinfile:
     path: /etc/default/locale
     regexp: '^LANG='
     line: 'LANG=ko_KR.UTF-8'
 
-# 4. Korean Locale 검증 (타겟 서버 파일 확인 — lookup은 컨트롤 노드를 읽으므로 사용 금지)
+# -----------------------------------------------------
+# 4. Korean Locale 검증 (타겟 서버 파일 확인)
+# -----------------------------------------------------
 - name: "Check system default locale"
   command: "grep '^LANG=' /etc/default/locale"
   register: locale_check

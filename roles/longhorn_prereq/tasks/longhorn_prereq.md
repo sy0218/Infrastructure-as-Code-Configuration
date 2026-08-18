@@ -11,40 +11,48 @@
 
 ## 🧩 main.yml
 ```yaml
-# -----------------------------------------------------
+# =====================================================
 # Longhorn 노드 사전 준비 (분산 블록 스토리지)
-# -----------------------------------------------------
-# open-iscsi: Longhorn이 볼륨을 노드에 attach할 때 iSCSI 사용 — 없으면 attach 실패
+# =====================================================
+# open-iscsi: Longhorn이 볼륨을 노드에 attach할 때 iSCSI 사용 → 없으면 attach 실패
 # multipathd: Longhorn 디바이스(/dev/sd*)를 가로채 mount를 실패시키므로 차단
-# -----------------------------------------------------
+# =====================================================
 
-# 1. open-iscsi 설치 — 인벤토리 open_iscsi_version으로 버전 고정
+# -----------------------------------------------------
+# 1. open-iscsi 설치 → 인벤토리 open_iscsi_version으로 버전 고정
 #    (버전 변경 시 hold 상태여도 해당 버전으로 수렴)
+# -----------------------------------------------------
 - name: "Install open-iscsi"
   apt:
     name: "open-iscsi={{ open_iscsi_version }}"
     state: present # 없으면 설치
     update_cache: yes # apt update 먼저 실행
-    cache_valid_time: 3600 # 캐시가 1시간 이내면 update 생략 (매 실행 시간 절약)
+    cache_valid_time: 3600 # 캐시가 1시간 이내면 update 생략
     allow_change_held_packages: true # hold 상태에서도 버전 변경 허용
     allow_downgrade: true # 하위 버전으로 고정 시 다운그레이드 허용
 
-# 2. 버전 고정 — 의도치 않은 업그레이드 방지
-#    (dpkg_selections 자체가 멱등 — command apt-mark hold는 매번 changed)
+# -----------------------------------------------------
+# 2. 버전 고정 → 의도치 않은 업그레이드 방지
+#    (dpkg_selections 자체가 멱등)
+# -----------------------------------------------------
 - name: "Hold open-iscsi package"
   dpkg_selections:
     name: open-iscsi
     selection: hold
 
+# -----------------------------------------------------
 # 3. iscsid 기동 + 부팅 자동시작 (systemd 모듈 자체가 멱등)
+# -----------------------------------------------------
 - name: "Enable and start iscsid"
   systemd:
     name: iscsid
     enabled: true
     state: started
 
-# 4. multipath 블랙리스트 배포 — multipathd가 재활성화돼도 Longhorn 디바이스는 제외
+# -----------------------------------------------------
+# 4. multipath 블랙리스트 배포 (multipathd가 재활성화돼도 Longhorn 디바이스는 제외)
 #    (copy는 내용이 같으면 changed=0 보장)
+# -----------------------------------------------------
 - name: "Blacklist Longhorn devices in multipath"
   copy:
     content: |
@@ -56,14 +64,18 @@
     group: root
     mode: "0644"
 
-# 5. multipathd 유닛 존재 확인 (조회 전용 — 미설치 환경에서 stop 실패 방지)
+# -----------------------------------------------------
+# 5. multipathd 유닛 존재 확인 (조회 전용 → 미설치 환경에서 stop 실패 방지)
+# -----------------------------------------------------
 - name: "Check multipathd unit"
   command: systemctl list-unit-files multipathd.service
   register: multipathd_unit
   failed_when: false
   changed_when: false
 
-# 6. multipathd 중지 + 비활성화 — socket이 서비스를 재기동하므로 socket부터 차단
+# -----------------------------------------------------
+# 6. multipathd 중지 + 비활성화 → socket이 서비스를 재기동하므로 socket부터 차단
+# -----------------------------------------------------
 - name: "Disable and stop multipathd"
   systemd:
     name: "{{ item }}"
@@ -74,8 +86,10 @@
     - multipathd.service
   when: "'multipathd.service' in multipathd_unit.stdout"
 
+# -----------------------------------------------------
 # 7. Longhorn 데이터 경로 생성 (file 모듈 자체가 멱등)
 #    → Longhorn 설치 시 defaultDataPath와 일치시켜야 함
+# -----------------------------------------------------
 - name: "Create Longhorn data directory"
   file:
     path: "{{ longhorn_data_path }}"
@@ -84,7 +98,9 @@
     group: root
     mode: "0755"
 
-# 8. 데이터 경로 디스크 여유 확인 (확인용 출력만 — 실패 조건 없음)
+# ----------------------------------------------------- 
+# 8. 데이터 경로 디스크 여유 확인 (확인용 출력만 / 실패 조건 없음)
+# -----------------------------------------------------
 - name: "Check data path disk space"
   command: df -h --output=target,size,avail,pcent {{ longhorn_data_path }}
   register: longhorn_disk
@@ -95,7 +111,7 @@
     msg: "{{ longhorn_disk.stdout_lines }}"
 
 # -----------------------------------------------------
-# 검증
+# 9. 검증
 # -----------------------------------------------------
 - name: "Check iscsid status"
   command: systemctl is-active iscsid
