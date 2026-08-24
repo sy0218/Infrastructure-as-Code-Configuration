@@ -3,7 +3,8 @@
 - **파괴적 작업** — 평소엔 플레이북에서 주석 상태로 두고,
 해체할 때만 K8s 롤 전부 주석 처리 + 이 플레이 주석 해제 후 실행한다.
 - 패키지(kubeadm/kubelet/kubectl, containerd)와 스왑은 남긴다 — 재구축은 k8s 롤 재실행으로.
-- kubeadm reset은 iptables 잔여 규칙을 정리하지 않으므로 **해체 후 노드 재부팅 권장**.
+- `kubeadm reset`이 손대지 않는 **CNI(Cilium) 잔여물**까지 함께 정리한다 — 상태 디렉토리와 가상 인터페이스.
+- kubeadm reset은 iptables 규칙과 BPF 맵을 정리하지 않으므로 **해체 후 노드 재부팅 권장**.
 ---
 <br>
 
@@ -36,6 +37,23 @@
   file:
     path: /etc/cni/net.d
     state: absent
+
+# 3-1. Cilium 잔여물 정리 (kubeadm reset이 지우지 않음)
+- name: "Remove cilium state"
+  file:
+    path: /var/lib/cilium
+    state: absent
+
+# 3-2. Cilium 가상 인터페이스 삭제 (없으면 rc≠0 → 실패 처리하지 않음)
+- name: "Delete cilium interfaces"
+  command: "ip link del {{ item }}"
+  register: cilium_link_del
+  changed_when: cilium_link_del.rc == 0
+  failed_when: false
+  loop:
+    - cilium_host
+    - cilium_net
+    - cilium_vxlan
 
 # 4. kubectl 계정 홈 디렉토리 조회 (조회 전용 → 상태 변경 없음)
 - name: "Get kubectl user home"
@@ -82,6 +100,11 @@
 ### 2️⃣ 잔여물 정리
 - kubelet 중지 (구성 없는 상태의 crashloop 방지, enabled는 유지)
 - `/etc/cni/net.d`(CNI 설정), kubectl 계정의 `.kube` 삭제 — file 모듈이라 없으면 changed=0
+- **Cilium 잔여물** — `kubeadm reset`은 CNI가 만든 것을 지우지 않는다. 상태 디렉토리 `/var/lib/cilium`과
+  가상 인터페이스 `cilium_host`/`cilium_net`(터널 모드였다면 `cilium_vxlan`)이 남아, 그대로 두면
+  재구축 시 남은 인터페이스와 충돌한다. `ip link del`은 대상이 없으면 `rc≠0`이라
+  `failed_when: false` + `changed_when: rc == 0`으로 "있으면 지우고 없으면 조용히 통과"를 만든다.
+- **BPF 맵은 이 롤로 지워지지 않는다** — 커널에 남으므로 완전 초기화하려면 재부팅해야 한다.
 - 패키지·스왑은 유지 → `k8s_ansible.yml` 재실행만으로 재구축 가능
 ---
 ### 3️⃣ 검증

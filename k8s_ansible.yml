@@ -30,9 +30,11 @@
     - { role: k8s_packages, tags: ['k8s_packages'] } # k8s 저장소 등록 + kubeadm/kubelet/kubectl 설치/hold + node-ip 고정
 
 # -----------------------------------------------------
-# 3. K8s 컨트롤플레인 초기화 + Calico (ap)
+# 3. K8s 컨트롤플레인 초기화 + CNI (ap)
 # → kubeadm init은 최초 1회만 동작 (admin.conf 있으면 재실행해도 스킵)
 # → 설정 바꿔서 다시 하려면 k8s_reset으로 클러스터 해체 후 재실행
+# → k8s_master 직후에는 CNI가 없어 노드가 NotReady
+#     — k8s_cilium 롤이 CNI를 설치하고 Ready까지 확인한다
 # -----------------------------------------------------
 - name: "[ K8s Control Plane.. ]"
   hosts: kubernetes_master
@@ -40,7 +42,9 @@
   gather_facts: false
 
   roles:
-    - { role: k8s_master, tags: ['k8s_master'] }
+    - { role: helm,       tags: ['helm'] }             # k8s_cilium 롤이 사용할 helm CLI
+    - { role: k8s_master, tags: ['k8s_master'] }       # kubeadm init + kubeconfig 배포
+    - { role: k8s_cilium, tags: ['k8s_cilium'] }       # CNI 설치 + Ready 검증
 
 # -----------------------------------------------------
 # 4. K8s 워커 조인 (s1, s2)

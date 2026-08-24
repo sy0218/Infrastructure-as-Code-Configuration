@@ -1,24 +1,24 @@
-# 🎛 K8s 컨트롤플레인 초기화 + Calico 설치 (Ansible)
-- kubeadm init으로 컨트롤플레인을 초기화하고 Calico(Tigera Operator)를 설치한다.
-- **스왑을 끄지 않는 구성**: `failSwapOn: false` + `swapBehavior`(인벤토리 `kubernetes_swap_behavior`)를
-KubeletConfiguration으로 적용 — 클러스터 ConfigMap으로 저장되어 join하는 워커에도 자동 적용된다.
-- kubeadm init은 **1회성 부트스트랩** — `creates` 게이팅으로 재실행 시 스킵.
-init 이후 `pod_subnet` 등 변수 변경은 재실행으로 반영되지 않는다 (k8s_reset 후 재구축 필요).
-- kubectl 사용 계정은 인벤토리 `kubernetes_admin_user`로 관리한다.
+# 🎛 K8s 컨트롤플레인 초기화 (K8s Master)
+- `kubeadm init`으로 마스터 노드(ap)의 컨트롤플레인을 부트스트랩하고, kubectl 계정에 kubeconfig(`~/.kube/config`)를 배포합니다.
+- **CNI는 이 롤이 설치하지 않습니다** — Cilium 설치는 `k8s_cilium` 롤 담당이라, 이 롤이 끝난 시점의 노드는 **NotReady 가 정상**입니다(Ready 검증도 Cilium 롤이 합니다).
+- **kube-proxy도 설치하지 않습니다** — `kubeadm-config.yaml.j2` 의 `skipPhases: [addon/kube-proxy]` 와 Cilium의 kube-proxy replacement 가 한 쌍입니다.
+- **스왑을 끄지 않는 구성**: `failSwapOn: false` + `swapBehavior`(`kubernetes_swap_behavior`)를 KubeletConfiguration으로 적용 — 클러스터 ConfigMap(kubelet-config)으로 저장되어 join하는 워커에도 자동 적용됩니다.
+- 버전·Pod CIDR·스왑 정책·kubectl 계정은 `group_vars/kubernetes.yml` 변수로 관리 (롤은 범용, 인벤토리가 동작 결정)
 ---
 <br>
 
 ## 🧩 main.yml
 ```yaml
 # -----------------------------------------------------
-# K8s 컨트롤플레인 초기화 + Calico 설치 (마스터 노드)
+# K8s 컨트롤플레인 초기화 (마스터 노드)
 # -----------------------------------------------------
 # [주의] kubeadm init은 1회성 부트스트랩 — creates 게이팅으로 재실행 시 스킵
-#  - init 이후 pod_subnet/kubernetes_swap_behavior 등 변경은 재실행으로
+#  - init 이후 pod_subnet/kubernetes_swap_behavior/skipPhases 등 변경은 재실행으로
 #    반영되지 않음 → k8s_reset 후 재구축 필요
 #  - init이 중간에 실패한 노드는 kubeadm reset -f 후 재실행
 #  - kubectl 계정은 인벤토리 kubernetes_admin_user로 관리 (.kube/config 배포 대상)
 #    롤 내부 kubectl 태스크는 계정과 무관하게 KUBECONFIG=admin.conf로 실행
+#  - CNI는 이 롤이 설치하지 않는다 → k8s_cilium 롤 담당 (그래서 여기선 노드가 NotReady)
 # -----------------------------------------------------
 
 # 1. kubeadm init 설정 배포 (template 자체가 멱등)
@@ -68,94 +68,24 @@ init 이후 `pod_subnet` 등 변수 변경은 재실행으로 반영되지 않�
     group: "{{ kubernetes_admin_user }}"
     mode: "0600"
 
-# 7. Tigera Operator 매니페스트 다운로드
-#    (파일명에 버전 포함 — calico_version 변경 시 새로 받고, 같으면 스킵되어 멱등)
-- name: "Download tigera operator manifest"
-  get_url:
-    url: "https://raw.githubusercontent.com/projectcalico/calico/v{{ calico_version }}/manifests/tigera-operator.yaml"
-    dest: "/root/tigera-operator-v{{ calico_version }}.yaml"
-    mode: "0644"
-  register: tigera_manifest
-
-# 8. Operator 설치 여부 확인 (rc=0 설치됨, rc=1 미설치)
-#    (kubectl diff는 대상 네임스페이스가 아직 없으면 rc=2 에러라 첫 설치 게이팅에 못 씀
-#     → 존재 확인으로 게이팅, 버전 변경은 7번 매니페스트 다운로드 changed로 감지)
-- name: "Check tigera operator deployment"
-  command: kubectl get deployment tigera-operator -n tigera-operator
-  register: tigera_check
-  changed_when: false
-  failed_when: tigera_check.rc not in [0, 1]
-  environment:
-    KUBECONFIG: /etc/kubernetes/admin.conf
-
-# 9. 미설치이거나 버전이 변경된 경우만 Operator 적용 — server-side apply 필수
-#    (create는 재실행 시 실패, client-side apply는 CRD가 커서 annotation 한도 초과)
-- name: "Apply tigera operator"
-  command: "kubectl apply --server-side -f /root/tigera-operator-v{{ calico_version }}.yaml"
-  when: tigera_check.rc == 1 or tigera_manifest.changed
-  environment:
-    KUBECONFIG: /etc/kubernetes/admin.conf
-
-# 10. Installation/APIServer CRD 등록 대기
-#     (operator 적용 직후엔 CRD 오브젝트 자체가 API 서버에 아직 안 보일 수 있음
-#      → kubectl wait는 대상이 없으면 대기 없이 즉시 NotFound라 until로 재시도)
-- name: "Wait for tigera CRDs established"
-  command: >-
-    kubectl wait --for condition=established --timeout=60s
-    crd/installations.operator.tigera.io crd/apiservers.operator.tigera.io
-  register: tigera_crd_wait
-  changed_when: false
-  until: tigera_crd_wait.rc == 0
-  retries: 3
-  delay: 10
-  environment:
-    KUBECONFIG: /etc/kubernetes/admin.conf
-
-# 11. Calico Installation CR 배포 (template 자체가 멱등)
-- name: "Deploy calico installation manifest"
-  template:
-    src: calico-install.yaml.j2
-    dest: /root/calico-install.yaml
-    owner: root
-    group: root
-    mode: "0644"
-
-# 12. Installation 적용 여부 확인 (rc=0 적용됨, rc=1 미적용)
-#     (적용 후에는 operator가 spec 기본값을 채우며 필드 소유권을 가져가
-#      server-side diff가 Conflict(rc=2)를 내므로 8번과 동일한 존재 확인 게이팅
-#      — 설정 변경 반영은 어차피 재구축 영역: 상단 [주의] 참고)
-- name: "Check calico installation"
-  command: kubectl get installation.operator.tigera.io default
-  register: calico_check
-  changed_when: false
-  failed_when: calico_check.rc not in [0, 1]
-  environment:
-    KUBECONFIG: /etc/kubernetes/admin.conf
-
-# 13. 미적용인 경우만 Installation 적용
-- name: "Apply calico installation"
-  command: kubectl apply --server-side -f /root/calico-install.yaml
-  when: calico_check.rc == 1
-  environment:
-    KUBECONFIG: /etc/kubernetes/admin.conf
 
 # -----------------------------------------------------
-# 검증 — Calico 기동까지 수 분 걸릴 수 있어 재시도 대기
+# 7. 검증
+#      - CNI 미설치 상태라 노드는 NotReady 가 정상
+#      - Ready 검증은 Cilium 롤이 담당
 # -----------------------------------------------------
-# 마스터 노드 Ready 대기 (control-plane 라벨로 조회 — 워커 상태와 무관하게 검증)
-- name: "Wait for master node Ready"
+# 마스터 노드가 API에 등록됐는지 대기
+- name: "Wait for master node registered"
   command: kubectl get nodes -l node-role.kubernetes.io/control-plane --no-headers
   register: master_node_status
   changed_when: false
-  until:
-    - master_node_status.stdout != ""
-    - "'NotReady' not in master_node_status.stdout"
-  retries: 30 # 최대 5분 대기 (30회 x 10초)
+  until: master_node_status.stdout != ""
+  retries: 18 # 최대 3분 대기 (18회 x 10초)
   delay: 10
   environment:
     KUBECONFIG: /etc/kubernetes/admin.conf
 
-# 마스터 노드 INTERNAL-IP 확인 (NAT IP(10.0.2.15) 오인 사고 검출)
+# 마스터 노드 INTERNAL-IP 확인
 - name: "Check master node internal IP"
   command: >-
     kubectl get nodes -l node-role.kubernetes.io/control-plane -o
@@ -171,62 +101,104 @@ init 이후 `pod_subnet` 등 변수 변경은 재실행으로 반영되지 않�
   register: master_swap_check
   changed_when: false
 
-- name: "Assert control plane ready with swap on"
+- name: "Assert control plane bootstrapped with swap on"
   assert:
     that:
-      - "'NotReady' not in master_node_status.stdout" # 마스터 Ready 재확인
       - master_internal_ip.stdout == ansible_host # host-only IP 사용 확인 (조건문 안에서는 {{ }} 금지)
       - swap_file_path in master_swap_check.stdout_lines # 스왑 활성 유지 확인
-    success_msg: "Good!.. | Control plane Ready ({{ master_internal_ip.stdout }}, swap on)"
-    fail_msg: "ERROR!.. | Control plane NOT ready, wrong node IP or swap off"
+    success_msg: "Good!.. | Control plane bootstrapped ({{ master_internal_ip.stdout }}, swap on) → CNI 미설치라 NotReady 정상"
+    fail_msg: "ERROR!.. | Wrong node IP or swap off"
 ```
 ---
 <br>
 
-## 🧩 templates
-### kubeadm-config.yaml.j2
-- `advertiseAddress: {{ ansible_host }}` — host-only IP로 API 서버 광고
-- `kubernetesVersion` — `kubernetes_package_version`에서 추출 (버전 고정 일관성)
-- `podSubnet: {{ pod_subnet }}` + KubeletConfiguration(failSwapOn/swapBehavior)
+## 🧩 templates/kubeadm-config.yaml.j2
+```yaml
+# kubeadm init 설정 (k8s_master 롤이 배포 — 값은 인벤토리 host.yml에서 관리)
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: {{ ansible_host }}
+nodeRegistration:
+  taints: []          # control-plane NoSchedule taint 미적용 (ap도 워크로드 스케줄링 → 필요 시 삭제)
+skipPhases:
+  - addon/kube-proxy # kube-proxy 미설치 — Cilium kube-proxy replacement가 대체 (k8s_cilium 롤과 한 쌍)
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: v{{ kubernetes_package_version.split('-')[0] }}
+networking:
+  podSubnet: {{ pod_subnet }}
+---
+# 스왑 켠 채 kubelet 기동 허용 + 스왑 사용 정책
+# (클러스터 전역 ConfigMap(kubelet-config)으로 저장되어 join하는 워커에도 자동 적용)
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+failSwapOn: false
+memorySwap:
+  swapBehavior: {{ kubernetes_swap_behavior }}
+```
+- `advertiseAddress: {{ ansible_host }}` — API 서버를 host-only IP(192.168.56.x)로 광고. 모든 플레이가 `gather_facts: false` 라 facts 대신 인벤토리 값을 쓴다.
+- `skipPhases: [addon/kube-proxy]` — kube-proxy addon 자체를 만들지 않는다. Service 처리는 Cilium eBPF(kube-proxy replacement)가 대신한다.
+- `kubernetesVersion` — `kubernetes_package_version`(예: `1.34.4-1.1`)에서 `-` 앞을 잘라 `v1.34.4` 로 만든다. 패키지 핀 버전과 컨트롤플레인 이미지 태그가 어긋나지 않게 하기 위함.
+- `podSubnet: {{ pod_subnet }}` — Cilium values의 IPAM CIDR과 같은 값이어야 한다.
+---
+<br>
 
-### calico-install.yaml.j2
-- `linuxDataplane: Iptables` 명시, `cidr: {{ pod_subnet }}` (podSubnet과 일치)
-- `nodeAddressAutodetectionV4.cidrs: [{{ node_cidr }}]` — host-only NIC 자동감지
+## 📌 group_vars 예시
+```yaml
+# group_vars/kubernetes.yml
+kubernetes_package_version: "1.34.4-1.1"      # kubernetes 패키지 버전 (kubeadm-config의 kubernetesVersion 원본)
+
+# =======================================
+# K8s 클러스터 구성 (k8s_master 사용)
+# → init 이후 변경해도 재실행으로 반영되지 않음 (k8s_reset 후 재구축 필요)
+# =======================================
+pod_subnet: "10.244.0.0/16"   # 노드망(192.168.56.x)과 겹치면 안 됨
+kubernetes_swap_behavior: "LimitedSwap"
+kubernetes_admin_user: "root" # 마스터에서 kubectl 사용할 계정 (.kube/config 배포 대상)
+```
+```yaml
+# group_vars/Ubuntu_Servers.yml — 스왑 검증에만 참조 (enable_swap 롤이 만든 경로)
+swap_file_path: /swap.img
+```
+- 노드 IP(`ansible_host`)는 인벤토리 `host.yml` 값이다 — `gather_facts: false` 라 facts로는 얻을 수 없다.
 ---
 <br>
 
 ## 🛠 작업 내용
-### 1️⃣ kubeadm init — 부트스트랩 게이팅 (멱등성 핵심)
-- 설정은 `template`으로 배포 후 `--config`로 init (플래그 나열 대신 선언적 관리)
-- `creates: /etc/kubernetes/admin.conf` → 이미 init된 노드는 **스킵** 보장
-- `--ignore-preflight-errors=Swap`은 사전 검사 통과용 — 실제 스왑 동작은 KubeletConfiguration이 담당
+### 1️⃣ kubeadm init 설정 배포
+- 플래그를 길게 나열하는 대신 `--config` 파일 하나로 선언적으로 관리한다 — `template` 모듈 자체가 멱등이라 값이 그대로면 changed가 나지 않는다.
+- 파일에 클러스터 부트스트랩 정보가 들어가므로 `mode: "0600"` (root 전용).
+- ⚠ **이 파일이 바뀌어도 2️⃣가 다시 돌지는 않는다** — 파일만 갱신되고 클러스터는 옛 설정 그대로다. `pod_subnet`·`kubernetes_swap_behavior`·`skipPhases` 를 바꿨다면 `k8s_reset` 후 재구축해야 반영된다.
 ---
-### 2️⃣ kubectl 계정 설정
-- `getent passwd`로 `kubernetes_admin_user`의 홈 디렉토리 조회 (하드코딩 없음, 계정 없으면 즉시 실패)
-- `.kube/config`에 admin.conf 복사 + 소유권 부여 (file/copy 멱등)
+### 2️⃣ 컨트롤플레인 초기화 (멱등성 핵심)
+- `kubeadm init` 은 **1회성 비멱등 명령**이다. 그래서 `creates: /etc/kubernetes/admin.conf` 로 게이팅해 이미 init된 노드에서는 명령 자체를 실행하지 않는다 — 재실행 시 **changed=0**.
+- 이 가드가 곧 "설정 변경은 재실행으로 반영되지 않는다"의 이유다. 되돌리려면 클러스터 해체(`k8s_reset`)가 유일한 경로다.
+- init이 중간에 실패해 `admin.conf` 만 남으면 다음 실행이 조용히 스킵되어 반쪽 클러스터가 된다 — 그 노드는 `kubeadm reset -f` 로 지운 뒤 재실행한다.
+- `--ignore-preflight-errors=Swap` 은 **사전 검사만 통과**시키는 플래그다. 실제로 스왑을 켠 채 kubelet이 뜨는 건 kubeadm-config의 `failSwapOn: false` + `swapBehavior: LimitedSwap` 이 담당한다. 이 저장소는 `enable_swap` 롤이 활성, `disable_swap` 롤이 비활성인 것이 의도된 구성이라 두 축이 모두 필요하다.
+- **kube-proxy 는 여기서 설치되지 않는다**(`skipPhases`). 따라서 이 롤만 돌린 상태의 클러스터는 Service VIP 를 처리할 주체가 없다 — `k8s_cilium` 롤이 kube-proxy replacement 로 그 자리를 메울 때까지는 미완성 상태로 보는 것이 맞다. 플레이북에서 두 롤이 같은 플레이에 연달아 등록된 이유다.
 ---
-### 3️⃣ Calico 설치 — 사전 체크 게이팅 + server-side apply
-- Operator 매니페스트는 `get_url` 다운로드 (파일명에 버전 포함 → 버전 변경 시에만 재다운로드)
-- **둘 다 존재 확인으로 게이팅** (diff 게이팅 불가): Operator는 대상 네임스페이스가 없으면
-`kubectl diff`가 rc=2 에러, Installation CR은 적용 후 operator가 spec 기본값을 채우며
-필드 소유권을 가져가 server-side diff가 Conflict(rc=2) 발생
-→ 존재 확인(rc=0/1) 후 **미설치일 때만** apply → 재실행 시 **changed=0**
-- 설정 변경(pod_subnet 등) 반영은 재실행이 아닌 재구축 영역 (k8s_reset 후 재실행)
-- **server-side apply 필수**: `create`는 재실행 실패, client-side apply는 CRD가 커서 annotation 한도 초과
-- Operator 적용 직후 CRD 등록 대기(`kubectl wait --for condition=established`) 후 Installation CR 적용
+### 3️⃣ kubectl 계정 kubeconfig 배포
+- 홈 디렉토리를 하드코딩하지 않고 `getent passwd` 로 조회한다 — 계정이 없으면 여기서 즉시 실패해 원인이 드러난다(조회 전용이라 `changed_when: false`).
+- passwd 6번째 필드가 홈 디렉토리라 `split(':')[5]` 로 뽑아 `set_fact` 한다.
+- `.kube` 디렉토리(`file`)와 `admin.conf` 복사(`copy`, `remote_src`)는 모듈 자체가 멱등이다. 관리자 자격증명 파일이므로 `0700`/`0600` + 계정 소유로 배포한다.
+- 롤 내부의 kubectl 태스크들은 이 사본을 쓰지 않고 `KUBECONFIG=/etc/kubernetes/admin.conf` 를 직접 지정한다 — `kubernetes_admin_user` 를 무엇으로 바꾸든 검증 동작이 흔들리지 않게 하기 위함이다.
 ---
-### 4️⃣ 검증
-- 마스터 노드 `Ready` 대기 — control-plane 라벨 조회 + `until`/`retries` (최대 5분)
-- INTERNAL-IP == `ansible_host` 확인 (NAT IP 오인 검출), `swapon`으로 스왑 활성 유지 확인
-- 하나라도 실패 시 `assert`로 플레이북 중단
+### 4️⃣ 검증 — "등록"까지만 확인한다
+- **Ready 를 기다리지 않는다.** CNI가 없으면 kubelet이 `NetworkPluginNotReady` 로 NotReady를 유지하는 것이 정상이므로, 여기서 Ready를 기다리면 반드시 타임아웃한다. 노드가 API 서버에 **등록**됐는지까지만 확인하고, Ready 검증은 `k8s_cilium` 롤에 넘긴다.
+- 라벨 셀렉터에 매칭되는 노드가 없으면 `kubectl get` 은 rc=0 에 빈 stdout을 낸다 — 그래서 rc가 아니라 `stdout != ""` 를 `until` 조건으로 쓴다. 대기는 18회 × 10초(최대 3분)로, kubelet 기동 + 노드 등록까지만 커버하면 되므로 Ready 대기(30회)보다 짧다.
+- `control-plane` 라벨로 조회하는 이유는 워커 상태와 무관하게 마스터만 검증하기 위해서다(이 시점엔 워커가 아직 join 전이다).
+- **INTERNAL-IP == `ansible_host` 검증은 VirtualBox NAT IP 오인 사고를 잡는 가드다.** VM의 첫 NIC은 NAT(모든 노드가 동일한 `10.0.2.15`)이라 노드 IP가 그쪽으로 잡히면 노드 3대가 같은 주소를 광고하게 되어 통신이 조용히 깨진다. `k8s_packages` 롤의 kubelet `--node-ip` 고정과 이 롤의 `advertiseAddress` 가 host-only IP로 걸려 있는지를 결과값으로 되짚는 것이다.
+- `swapon --show` 로 `swap_file_path` 가 여전히 활성인지 확인한다 — LimitedSwap 구성의 전제라, 누군가 `disable_swap` 롤을 켜거나 수동으로 swapoff 했다면 여기서 잡힌다.
+- assert 조건 안에서는 `{{ }}` 를 쓰지 않는다(하우스 규칙). 성공 메시지에 "CNI 미설치라 NotReady 정상" 을 남겨, 이 시점의 NotReady를 장애로 오인하지 않게 한다.
 ---
 <br>
 
 ## ✅ 실행 결과 예시
 ```bash
-TASK [Assert control plane ready with swap on]
+TASK [Assert control plane bootstrapped with swap on]
 ok: [ap] => {
-    "msg": "Good!.. | Control plane Ready (192.168.56.200, swap on)"
+    "msg": "Good!.. | Control plane bootstrapped (192.168.56.200, swap on) → CNI 미설치라 NotReady 정상"
 }
 ```
----

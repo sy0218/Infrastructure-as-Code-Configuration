@@ -5,6 +5,8 @@ localAPIEndpoint:
   advertiseAddress: {{ ansible_host }}
 nodeRegistration:
   taints: []          # control-plane NoSchedule taint 미적용 (ap도 워크로드 스케줄링 → 필요 시 삭제)
+skipPhases:
+  - addon/kube-proxy # kube-proxy 미설치 — Cilium kube-proxy replacement가 대체 (k8s_cilium 롤과 한 쌍)
 ---
 apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration

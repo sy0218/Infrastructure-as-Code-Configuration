@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-Ubuntu 24.04 서버를 Ansible로 프로비저닝하는 IaC 저장소. Control Node(localhost)에서 3대 노드(ap=192.168.56.200, s1=.201, s2=.202)에 password 기반 SSH로 배포한다. OS 기본 설정(ubuntu) → K8s 클러스터(kubeadm + containerd + Calico) → Longhorn 노드 사전 준비 / Terraform / Helm / BuildKit(빌드 데몬) 설치 / Kafka 로컬 PV 디렉토리 선행작업을 **플레이북 7개 · 롤 33종**으로 나눠 담당한다. 모든 문서·주석은 한국어로 작성한다.
+Ubuntu 24.04 서버를 Ansible로 프로비저닝하는 IaC 저장소. Control Node(localhost)에서 3대 노드(ap=192.168.56.200, s1=.201, s2=.202)에 password 기반 SSH로 배포한다. OS 기본 설정(ubuntu) → K8s 클러스터(kubeadm + containerd + Cilium) → Longhorn 노드 사전 준비 / Terraform / Helm / BuildKit(빌드 데몬) 설치 / Kafka 로컬 PV 디렉토리 선행작업을 **플레이북 7개 · 롤 34종**으로 나눠 담당한다. 모든 문서·주석은 한국어로 작성한다.
 
 **이 저장소가 담당하는 범위는 "노드까지"다.** 데이터 스토어(Kafka·MinIO·Neo4j·PostgreSQL)와 Harbor·인그레스는 전부 Terraform 저장소의 Helm 스택으로 이관됐고, 여기 남은 것은 그 차트들이 전제하는 **노드 선행작업**(디렉토리·드라이브·커널·hosts·레지스트리 신뢰)뿐이다.
 
@@ -77,7 +77,8 @@ ansible-playbook ubuntu_ansible.yml --tags etc_hosts   # 롤 단독 재실행
 - `containerd_insecure_registries` 값은 certs.d 디렉토리명이 되므로 이미지 주소의 host:port와 **글자 그대로** 일치해야 하고, `data-layer-harbor` 이름은 etc_hosts 롤이 /etc/hosts에 등록해야 풀린다(etc_hosts는 /etc/hosts를 통째로 재생성). harbor는 VIP 계열이므로 이미지 pull은 MetalLB 인그레스 VIP를 경유한다.
 - **etc_hosts 롤의 data-layer 이름은 두 계열로 갈린다 — 기준은 '장애 전환을 누가 하느냐'다.** `data_layer_dns_names`(minio-console·neo4j)는 이름 하나가 노드 IP 전부를 갖고 전환을 클라이언트가 한다(죽은 IP면 TCP 타임아웃 대기). `data_layer_vip_dns_names`(harbor·kafka-ui·airflow·api·grafana·prometheus·headlamp)는 전부 `ingress_vip` 하나를 가리키고 전환은 MetalLB가 한다. (postgres 외부 접속은 hosts 이름 없이 전용 VIP — Terraform 102-ingress `postgres_vip`:5432 — 로 한다.) **한 이름을 두 계열에 동시에 넣지 말 것** — 클라이언트가 아무 데나 붙어 증상이 매번 달라진다. 검증 assert도 기대 개수가 달라(노드 수 곱하기 vs ×1) 태스크가 분리돼 있으니 합치지 말 것. `ingress_vip`는 Terraform `102-ingress`·`306-api`의 `ingress_vip`와 **글자 그대로** 같아야 한다.
 - /etc/hosts는 인그레스 전환·노드 IP 변경 때 `--tags etc_hosts`(또는 `start_configuration.sh <경로> etc_hosts`)로 단독 갱신한다. **접속하는 PC의 hosts는 이 롤의 관리 대상이 아니다**(대상은 노드 3대뿐) — 수동 관리이며 형식은 README 참조.
-- kubelet `--node-ip`와 Calico 감지(`node_cidr`)는 host-only NIC(192.168.56.x)에 고정 — VirtualBox NAT IP(10.0.2.15)가 잡히는 것을 방지한다.
+- kubelet `--node-ip`와 Cilium의 `devices`(`cilium_device`=eth1)는 host-only NIC(192.168.56.x)에 고정 — VirtualBox NAT IP(10.0.2.15)가 잡히는 것을 방지한다.
+- CNI는 Cilium(eBPF + Native Routing + kube-proxy replacement)이며 `k8s_cilium` 롤이 담당한다. kubeadm-config의 `skipPhases: addon/kube-proxy`와 Cilium values의 `kubeProxyReplacement`는 **한 쌍**이라 한쪽만 바꾸면 클러스터가 동작하지 않는다.
 
 ## 커밋 컨벤션 ([COMMIT_CONVENTION.md](COMMIT_CONVENTION.md))
 

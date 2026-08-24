@@ -2,7 +2,8 @@
 # K8s 사전 준비 — 커널 모듈 + sysctl
 # -----------------------------------------------------
 # overlay: containerd의 overlayfs 스토리지 드라이버용
-# br_netfilter: 브리지 트래픽을 iptables가 처리하도록 함 (Calico iptables 모드 필수)
+# br_netfilter: 브리지 트래픽을 iptables가 보도록 함 (kubeadm preflight 요구 항목 —
+#               CNI는 Cilium eBPF라 데이터플레인은 iptables를 타지 않는다)
 # [주의] 스왑은 끄지 않음 — kubelet failSwapOn: false + LimitedSwap 구성 (k8s_master 롤 참고)
 # -----------------------------------------------------
 

@@ -1,0 +1,107 @@
+# =========================================================
+# CNI: Cilium (eBPF + Native Routing + kube-proxy Replacement)
+# =========================================================
+# [주의]
+#  - kubeadm-config의 skipPhases(addon/kube-proxy)와 한 쌍 — kube-proxy가 없으므로
+#    values의 k8sServiceHost/Port를 반드시 지정한다 (누락 시 agent crashloop)
+#  - Native Routing은 전 노드가 단일 L2에 있다는 전제 — 다른 서브넷 노드 합류 시 BGP 검토
+#  - helm CLI 필요 → 인벤토리 helm 그룹에 마스터가 포함돼야 한다
+#  - routingMode/ipam 변경은 helm upgrade로 반영돼도 기존 노드에 라우트·BPF 맵이 남는다
+#    → k8s_reset 후 재구축 권장
+# =========================================================
+
+# ---------------------------------------------------------
+# 1. Cilium helm 저장소 등록
+# ---------------------------------------------------------
+- name: "Add cilium helm repo"
+  kubernetes.core.helm_repository:
+    name: cilium
+    repo_url: https://helm.cilium.io
+
+# ---------------------------------------------------------
+# 2. 저장소 인덱스 갱신
+# ---------------------------------------------------------
+- name: "Update cilium helm repo"
+  command: helm repo update cilium
+  changed_when: false
+
+# ---------------------------------------------------------
+# 3. values 배포 (template 자체가 멱등)
+# ---------------------------------------------------------
+- name: "Deploy cilium values"
+  template:
+    src: cilium-values.yaml.j2
+    dest: /root/cilium-values.yaml
+    owner: root
+    group: root
+    mode: "0644"
+  register: cilium_values
+
+# ---------------------------------------------------------
+# 4. 설치 여부 확인 (rc=0 설치됨, rc≠0 미설치)
+# ---------------------------------------------------------
+- name: "Check cilium release"
+  command: "helm status cilium -n {{ cilium_namespace }}"
+  register: cilium_check
+  changed_when: false
+  failed_when: false
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+# ---------------------------------------------------------
+# 5. 미설치이거나 values가 바뀐 경우만 설치/갱신
+# ---------------------------------------------------------
+- name: "Install cilium"
+  command: >-
+    helm upgrade --install cilium cilium/cilium
+    --version {{ cilium_version }}
+    --namespace {{ cilium_namespace }}
+    --values /root/cilium-values.yaml
+    --wait --timeout 10m
+  when: cilium_check.rc != 0 or cilium_values.changed
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+# ---------------------------------------------------------
+# 6. 검증 → CNI 설치 후에 노드가 Ready 가 된다.
+# ---------------------------------------------------------
+- name: "Wait for master node Ready"
+  command: kubectl get nodes -l node-role.kubernetes.io/control-plane --no-headers
+  register: cilium_node_status
+  changed_when: false
+  until:
+    - cilium_node_status.stdout != ""
+    - "'NotReady' not in cilium_node_status.stdout"
+  retries: 30 # 최대 5분 대기 (30회 x 10초)
+  delay: 10
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+# kube-proxy 미설치 확인 (skipPhases 가 실제로 먹었는지 → rc≠0 이 정상)
+- name: "Check kube-proxy absent"
+  command: kubectl get daemonset kube-proxy -n kube-system
+  register: kube_proxy_check
+  changed_when: false
+  failed_when: false
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+# 데이터플레인 모드 확인 (KPR / native routing 이 실제로 적용됐는지)
+- name: "Check cilium status"
+  command: >-
+    kubectl -n {{ cilium_namespace }} exec ds/cilium -c cilium-agent --
+    cilium-dbg status
+  register: cilium_status
+  changed_when: false
+  environment:
+    KUBECONFIG: /etc/kubernetes/admin.conf
+
+- name: "Assert cilium dataplane configured"
+  assert:
+    that:
+      - "'NotReady' not in cilium_node_status.stdout" # CNI 기동 후 노드 Ready
+      - kube_proxy_check.rc != 0 # kube-proxy 미설치 (skipPhases 검증)
+      - cilium_status.stdout is search('KubeProxyReplacement:\s+True') # KPR 활성
+      - cilium_status.stdout is search('Network:\s+Native') # 캡슐화 없음
+    success_msg: "Good!.. | Cilium {{ cilium_version }} ready (native routing, kube-proxy replaced)"
+    fail_msg: "ERROR!.. | Cilium not ready, kube-proxy still present or wrong routing mode"

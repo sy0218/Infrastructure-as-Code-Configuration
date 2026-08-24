@@ -829,7 +829,7 @@ kafka_prereq
 
 ## 📜 K8s 플레이북 (`k8s_ansible.yml`)
 
-> **kubeadm + containerd + Calico 기반의 Kubernetes 클러스터를 구성하는 플레이북입니다.**
+> **kubeadm + containerd + Cilium 기반의 Kubernetes 클러스터를 구성하는 플레이북입니다.**
 
 ---
 
@@ -838,8 +838,14 @@ kafka_prereq
   - `k8s_prereq`
   - `containerd`
   - `k8s_packages`
-- **Control Plane 초기화**
-- **Calico 네트워크 구성**
+- **Control Plane 초기화** (`k8s_master`)
+  - `kubeadm init` 시 **kube-proxy를 설치하지 않음** (`skipPhases: addon/kube-proxy`)
+  - 이 시점에는 CNI가 없어 노드가 `NotReady` 인 것이 정상
+- **CNI 구성 — Cilium** (`k8s_cilium`)
+  - eBPF 데이터플레인 + Native Routing(캡슐화 없음) + kube-proxy Replacement
+  - Helm으로 설치하므로 `helm` 롤이 먼저 실행됨 (인벤토리 `helm` 그룹에 `ap` 포함)
+  - 관측성으로 **Hubble + Hubble UI** 함께 설치 (`cilium_hubble_enabled`, `cilium_hubble_ui_enabled`)
+  - 여기서 노드가 `Ready` 가 된다
 - Worker Node를 → 클러스터에 **Join**
 - 마지막에 클러스터 상태 검증
 
@@ -855,8 +861,14 @@ kafka_prereq
 
 ### 주의사항
 
-- `Kubernetes/containerd/runc/Calico` 버전과 네트워크 설정은
+- `Kubernetes/containerd/runc/Cilium` 버전과 네트워크 설정은
   `group_vars/kubernetes.yml`에서 관리
+- **kube-proxy 미설치는 `kubeadm init` 시점의 결정**이라 Cilium 설정만 바꿔서는 되돌릴 수 없음
+  - `skipPhases`(kubeadm-config)와 `kubeProxyReplacement`(Cilium values)는 한 쌍으로 움직인다
+- **`cilium_hubble_ui_enabled: true` 로 두려면 `cilium_hubble_enabled` 도 반드시 `true` 여야 함**
+  - UI는 `hubble.relay` 를 통해 흐름을 받으므로, relay가 꺼진 상태로 UI만 켜면
+    차트 검증에 걸려 `helm` 설치 자체가 실패한다
+    (`Hubble UI requires .Values.hubble.relay.enabled=true`)
 - `kubeadm init/join`은 **1회성 작업**
   - `pod_subnet` 등을 변경해도 재실행만으로 반영되지 않음
   - 클러스터를 다시 구성하려면 `k8s_reset`으로 기존 클러스터를 먼저 제거
@@ -1070,7 +1082,12 @@ fail_msg: "[FAIL] sshpass install failed"
 ---
 
 ### 🔹 k8s_master → [`📂 k8s_master.md`](./roles/k8s_master/tasks/k8s_master.md)
-- 컨트롤플레인 초기화(kubeadm init) + Calico 설치 → 스왑 유지(LimitedSwap) 구성. `admin.conf` 는 마스터의 `kubernetes_admin_user` 홈에만 배포된다
+- 컨트롤플레인 초기화(kubeadm init) → 스왑 유지(LimitedSwap) 구성 + kube-proxy 미설치(`skipPhases`). `admin.conf` 는 마스터의 `kubernetes_admin_user` 홈에만 배포된다. CNI가 없어 이 롤이 끝난 시점에는 노드가 `NotReady` 다
+---
+
+### 🔹 k8s_cilium → [`📂 k8s_cilium.md`](./roles/k8s_cilium/tasks/k8s_cilium.md)
+- CNI 설치 — Cilium (eBPF + Native Routing + kube-proxy Replacement) + Hubble 관측성. Helm으로 배포하며 노드가 `Ready` 가 되는 것까지 검증한다 (`group_vars/kubernetes.yml` 의 `cilium_version`, `cilium_device`, `cilium_hubble_enabled`, `cilium_hubble_ui_enabled` 기준)
+- Hubble UI 접속: `kubectl -n kube-system port-forward svc/hubble-ui 12000:80 --address 0.0.0.0` → `http://192.168.56.200:12000`
 ---
 
 ### 🔹 k8s_worker → [`📂 k8s_worker.md`](./roles/k8s_worker/tasks/k8s_worker.md)

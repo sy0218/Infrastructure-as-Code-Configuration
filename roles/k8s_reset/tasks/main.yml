@@ -26,6 +26,23 @@
     path: /etc/cni/net.d
     state: absent
 
+# 3-1. Cilium 잔여물 정리 (kubeadm reset이 지우지 않음)
+- name: "Remove cilium state"
+  file:
+    path: /var/lib/cilium
+    state: absent
+
+# 3-2. Cilium 가상 인터페이스 삭제 (없으면 rc≠0 → 실패 처리하지 않음)
+- name: "Delete cilium interfaces"
+  command: "ip link del {{ item }}"
+  register: cilium_link_del
+  changed_when: cilium_link_del.rc == 0
+  failed_when: false
+  loop:
+    - cilium_host
+    - cilium_net
+    - cilium_vxlan
+
 # 4. kubectl 계정 홈 디렉토리 조회 (조회 전용 → 상태 변경 없음)
 - name: "Get kubectl user home"
   command: "getent passwd {{ kubernetes_admin_user }}"
