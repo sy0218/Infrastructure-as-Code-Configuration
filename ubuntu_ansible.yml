@@ -1,7 +1,7 @@
 # =====================================================
 # Control Node
 # =====================================================
-- name: "[ Setup Control Node.. ]"
+- name: "[ Setup Control Node ]"
   hosts: localhost
   become: true
   gather_facts: false
