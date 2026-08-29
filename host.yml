@@ -31,6 +31,7 @@ all:
 
     terraform:
       hosts:
+        ap:
         s2:
 
     helm:
@@ -47,4 +48,5 @@ all:
 
     buildkitd:
       hosts:
+        ap: # 빌드 머신
         s2: # 빌드 머신

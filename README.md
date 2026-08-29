@@ -607,7 +607,7 @@ class CallbackModule(CallbackBase):
 
 # Kafka 노드 선행작업 (kafka_prereq_ansible.yml)
 #   → 로컬 PV 디렉토리 2종(/data/kafka-controller, /data/kafka-broker)을 
-#   → root:root 0770 으로 만들고 권한까지 검증한다.
+#   → root:root 2770(setgid) 으로 만들고 권한까지 검증한다.
 /my_project/Infrastructure-as-Code-Ansible/bin/start_kafka_prereq.sh /my_project/Infrastructure-as-Code-Ansible all
 
 # BuildKit 설치 (buildkitd_ansible.yml) → docker 없는 이미지 빌드/push 데몬
@@ -753,7 +753,7 @@ ansible-playbook ubuntu_ansible.yml --tags etc_hosts
 
 ## 📜 Kafka 플레이북 (`kafka_prereq_ansible.yml`)
 
-> **Kafka 브로커는 Kubernetes의 Strimzi가 관리하고, 이 플레이북은 Kafka가 사용할 노드의 저장공간만 미리 준비합니다.**
+> **Kafka 브로커는 Kubernetes 의 StatefulSet(Terraform 저장소 `301-kafka`)이고, 이 플레이북은 Kafka가 사용할 노드의 저장공간만 미리 준비합니다.**
 
 ---
 
@@ -769,15 +769,14 @@ ansible-playbook ubuntu_ansible.yml --tags etc_hosts
 
 ### 주의사항
 
-- 디렉토리 권한은 **`0770`이 중요**
-  - Strimzi Kafka 컨테이너가 비루트 사용자로 실행되므로 그룹 쓰기 권한이 필요함
+- 디렉토리 권한은 **`2770`이 중요** (그룹 쓰기 + setgid — kubelet 의 fsGroup 처리가 켜는 비트와 같게 두어 재실행 때 재귀 chown 이 반복되지 않게 한다)
+  - Kafka 컨테이너(apache/kafka, appuser)가 비루트로 실행되므로 그룹 쓰기 권한이 필요함
   - 권한이 없으면 Kafka가 디렉토리를 생성하지 못해 `CrashLoopBackOff`가 발생할 수 있음
 
 - **설치 순서**
 ```text
 kafka_prereq
     ↓
-105-strimzi (Operator)
     ↓
 301-kafka (Kafka)
 ```
@@ -785,8 +784,8 @@ kafka_prereq
 - **[중요] 노드를 추가할 때도 반드시 이 플레이북을 먼저 실행**
   - **디렉토리 준비 없이 Kafka 노드만 추가하면 PV 마운트에 실패할 수 있음**
 - Kafka 설정과 토픽은 `301-kafka`에서 관리
-  - `kafka.nodes` → 브로커와 노드 배치
-  - `KafkaTopic` → **Kafka 토픽**
+  - `kafka.nodes` → 브로커 ID ↔ 노드 ↔ 노드 IP 고정표 (인덱스 = 브로커 ID = 파드 ordinal)
+  - `topics` → **Kafka 토픽** (helm hook Job)
 
 ---
 </br>
@@ -1122,8 +1121,8 @@ fail_msg: "[FAIL] sshpass install failed"
 ---
 
 ### 🔹 kafka_prereq → [`📂 kafka_prereq.md`](./roles/kafka_prereq/tasks/kafka_prereq.md)
-- Strimzi(Terraform `301-kafka`)가 정적 local PV 로 쓰는 노드 디렉토리 2종 생성 + 권한 검증 → `/data/kafka-controller` + `/data/kafka-broker` (`group_vars/kafka.yml` 기준, 멱등)
-- **[주의]** 모드 `0770`(그룹 쓰기)이 없으면 Strimzi 파드가 CrashLoopBackOff. 브로커 설치 자체는 이 저장소 범위 밖이다
+- Terraform `301-kafka`(StatefulSet)가 정적 local PV 로 쓰는 노드 디렉토리 2종 생성 + 권한 검증 → `/data/kafka-controller` + `/data/kafka-broker` (`group_vars/kafka.yml` 기준, 멱등)
+- **[주의]** 모드 `2770`(그룹 쓰기 + setgid)이 없으면 Kafka 파드가 CrashLoopBackOff 이거나 재기동마다 데이터 전체를 재귀 chown 한다. 브로커 설치 자체는 이 저장소 범위 밖이다
 ---
 
 ### 🔹 buildkitd → [`📂 buildkitd.md`](./roles/buildkitd/tasks/buildkitd.md)

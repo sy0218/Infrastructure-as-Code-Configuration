@@ -1,5 +1,5 @@
 # =========================================================================
-# Kafka 노드 선행작업 → Strimzi 로컬 PV 디렉토리 준비
+# Kafka 노드 선행작업 → 301-kafka(StatefulSet) 로컬 PV 디렉토리 준비
 # =========================================================================
 
 
@@ -14,7 +14,7 @@
     group: "{{ kafka_data_group }}"
     mode: "{{ kafka_data_mode }}"
   loop:
-    - "{{ kafka_controller_data_dir }}" # KRaft 쿼럼 로그
+    - "{{ kafka_controller_data_dir }}" # KRaft 메타데이터 로그 (metadata.log.dir)
     - "{{ kafka_broker_data_dir }}" # 토픽 로그 세그먼트
 
 # -------------------------------------------------------------------------

@@ -1,18 +1,25 @@
 # =====================================================
 # [Kafka 노드 선행작업 변수]
 # =====================================================
-# Kafka는 Kubernetes + Strimzi로 배포한다.
-# 이 변수는 Strimzi Kafka가 사용할 노드의 Local PV 디렉토리를 지정한다.
-# → 아래 경로는 301-kafka의 Local PV 경로와 동일해야 한다.
+# Kafka StatefulSet(301-kafka)의 Local PV 저장 경로
+# → 301-kafka의 Local PV 경로와 동일하게 설정
 # =====================================================
 
-# Kafka 데이터 저장 경로
-kafka_broker_data_dir: /data/kafka-broker       # 브로커 토픽 데이터
-kafka_controller_data_dir: /data/kafka-controller # KRaft 컨트롤러 데이터
 
+# -----------------------------------------------------
+# Kafka 데이터 저장 경로
+# kafka_broker_data_dir      → 브로커 토픽 데이터
+# kafka_controller_data_dir  → KRaft 메타데이터 로그
+# -----------------------------------------------------
+kafka_broker_data_dir: /data/kafka-broker
+kafka_controller_data_dir: /data/kafka-controller
+
+
+# -----------------------------------------------------
 # 디렉토리 권한
-# Strimzi 컨테이너는 비루트(uid 1001, gid 0)로 실행되므로
-# root 소유 + 그룹 쓰기 권한(0770)을 사용한다.
+# Kafka 컨테이너가 비루트로 실행되므로 root 소유 + 그룹 쓰기 권한 적용
+# 2770(setgid): 하위 파일/디렉토리도 root 그룹 권한을 유지
+# -----------------------------------------------------
 kafka_data_owner: root
 kafka_data_group: root
-kafka_data_mode: '0770'
+kafka_data_mode: '2770'
