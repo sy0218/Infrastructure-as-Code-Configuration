@@ -14,8 +14,7 @@ root_password: "1234"
 # data-layer 외부 접속용 DNS 이름 목록 (etc_hosts 사용)
 # =======================================
 # 1. 노드 IP 계열 → 이름 하나가 노드 IP 전부를 A 레코드로 갖는다(노드당 1줄).
-#    (data-layer-git 은 303-git 퇴역과 함께 삭제됐다 — postgres 외부 접속은 이름 없이
-#     전용 VIP(Terraform 102-ingress 의 postgres_vip):5432 로 붙는다)
+#    (postgres 외부 접속은 hosts 이름 없이 전용 VIP(Terraform 102-ingress 의 postgres_vip):5432 로 붙는다)
 data_layer_dns_names:
   - data-layer-minio-console
   - data-layer-neo4j
@@ -36,7 +35,7 @@ data_layer_vip_dns_names:
 # =======================================
 # 인그레스 진입점 VIP (etc_hosts 사용)
 # → MetalLB 가 이 주소를 노드 한 대에 붙여 두고, 그 노드가 죽으면 다른 노드로 옮긴다.
-# Terraform 102-ingress 의 ingress_vip / 306-api 의 ingress_vip 와 글자 그대로 같아야 한다. 노드망(192.168.56.0/24) 안이면서 노드 IP/DHCP 대역과 겹치면 안 된다
+# Terraform 102-ingress 의 ingress_vip / 305-api 의 ingress_vip 와 글자 그대로 같아야 한다. 노드망(192.168.56.0/24) 안이면서 노드 IP/DHCP 대역과 겹치면 안 된다
 #   — L2 모드는 같은 브로드캐스트 도메인에서 ARP 로 광고하는 방식이다.
 # =======================================
 ingress_vip: 192.168.56.240

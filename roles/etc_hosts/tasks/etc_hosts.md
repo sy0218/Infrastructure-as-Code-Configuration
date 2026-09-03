@@ -146,11 +146,11 @@ systemd-resolved/Avahi 가 질의를 가로챌 수 있어서다.
 - **장애 전환 주체는 클라이언트다** — 죽은 IP 로 먼저 붙으면 TCP 타임아웃을 기다린 뒤
   다음 IP 로 넘어간다. glibc 가 여러 주소를 반환하려면 `/etc/host.conf` 에
   `multi on`(Ubuntu 기본값)이 있어야 한다
-- 여기 남은 이유: `data-layer-minio-console` 은 304-minio(K8s) 서버가 hostNetwork 로
-  각 노드 :9001 에 직접 여는 포트라 인그레스를 끼우지 않고(끼우면 접속 경로가 둘로 갈라진다),
-  `data-layer-neo4j` 는 K8s 밖 `ap` 노드의 systemd 서비스라 Service 객체가 없다
-  (`data-layer-git` 은 303-git 퇴역과 함께 삭제됐다. K8s 로 복귀한 postgres 의 외부 접속은
-  hosts 이름 없이 전용 VIP — Terraform 102-ingress `postgres_vip`:5432 — 로 한다)
+- 여기 남은 이유: 둘 다 **K8s 밖 노드 로컬 설치**라 Service 객체가 없어 인그레스를 끼울
+  대상 자체가 없다 — `data-layer-minio-console` 은 노드가 직접 여는 :9001,
+  `data-layer-neo4j` 는 `ap` 노드의 systemd 서비스다
+  (K8s 로 복귀한 postgres 의 외부 접속은 hosts 이름 없이
+  전용 VIP — Terraform 102-ingress `postgres_vip`:5432 — 로 한다)
 
 #### ② VIP 계열 — `data_layer_vip_dns_names` (이름 7개, 총 1줄)
 - 이름 전부가 **인그레스 VIP 하나**(`ingress_vip`)를 가리킨다
@@ -188,7 +188,7 @@ ok: [192.168.56.200] => {
 
 TASK [Assert /etc/hosts ingress VIP DNS name occurrence count]
 ok: [192.168.56.200] => {
-    "msg": "Good!.. | VIP DNS name occurrences: 6 (names: 6 x 1 line)"
+    "msg": "Good!.. | VIP DNS name occurrences: 7 (names: 7 x 1 line)"
 }
 ```
 ---

@@ -80,24 +80,28 @@ OS 및 실행 환경을 자동으로 구성하는 프로젝트 입니다.**
 - Ansible 기본 출력인 `ok=20 changed=5 failed=0` 만으로는 **어떤 Role과 서버에서 문제가 발생했는지 한눈에 파악하기 어렵습니다.**
 - 따라서, `Callback Plugin`을 이용하여 **`Role`별/`Host`별 실행 결과를 요약해서 표시합니다.**
 ```text
-========== Ansible Summary ==========
+=========================================================================
+ Ansible Execution Summary
+=========================================================================
 
-Role Result
--------------
-common     : OK 15 / Changed 3 / Failed 0
-docker     : OK 10 / Changed 5 / Failed 0
+Role           Task                                           Result
+-------------------------------------------------------------------------
+hadoop_prereq  Create hadoop local PV directories             SUCCESS
+hadoop_prereq  Check hadoop local PV directories              SUCCESS
+hadoop_prereq  Assert hadoop local PV directories are usable  PASS
 
-Host Result
--------------
-server01   : SUCCESS
-server02   : SUCCESS
+=========================================================================
+HOST SUMMARY
 
-Total
--------------
-Tasks       : 45
-Changed     : 8
-Failed      : 0
-=====================================
+ap : PASS (3/3)
+s1 : PASS (3/3)
+s2 : PASS (3/3)
+
+TOTAL
+Tasks : 9
+Passed: 9
+Failed: 0
+=========================================================================
 ```
 #### 효과
 - 어떤 Role에서 문제가 발생했는지 즉시 확인
@@ -272,8 +276,8 @@ State를 기반으로 현재 환경과 코드의 차이를 비교하여 필요�
 </br>
 
 ## ✨ 주요 특징
-- **Role 기반 모듈 구조** : 기능 단위로 분리된 38개 롤을 조합해 서버 구성
-- **단계별 플레이북** : OS 기본/K8s/부가 도구/데이터 스토어까지 10개 플레이북으로 분리 실행
+- **Role 기반 모듈 구조** : 기능 단위로 분리된 35개 롤을 조합해 서버 구성
+- **단계별 플레이북** : OS 기본/K8s/노드 선행작업/도구 설치까지 8개 플레이북으로 분리 실행
 - **중앙 집중 변수** : 버전/경로/계정을 `group_vars/`의 그룹별 파일에서 관리 (인벤토리 `host.yml`은 구조만)
 - **멱등성 보장** : 재실행해도 안전, 변경이 필요한 항목만 적용
 - **멀티서버 확장성** : 인벤토리에 서버만 추가하면 N대 동시 프로비저닝
@@ -301,6 +305,7 @@ Infrastructure-as-Code-Ansible/
 │   ├── kubernetes.yml       # Kubernetes / containerd / runc 버전
 │   ├── longhorn.yml         # Longhorn 설정
 │   ├── kafka.yml            # Kafka Local PV 경로
+│   ├── hadoop.yml           # Hadoop Local PV 경로
 │   ├── terraform.yml        # Terraform 버전
 │   ├── helm.yml             # Helm 버전
 │   └── buildkitd.yml        # BuildKit 버전 및 설정
@@ -309,6 +314,7 @@ Infrastructure-as-Code-Ansible/
 ├── k8s_ansible.yml          # Kubernetes 클러스터 구성
 ├── longhorn_ansible.yml     # Longhorn 노드 사전 준비
 ├── kafka_prereq_ansible.yml # Kafka Local PV 사전 준비
+├── hadoop_prereq_ansible.yml # Hadoop Local PV 사전 준비
 ├── terraform_ansible.yml    # Terraform 설치
 ├── helm_ansible.yml         # Helm 설치
 ├── buildkitd_ansible.yml    # BuildKit 설치
@@ -319,6 +325,7 @@ Infrastructure-as-Code-Ansible/
 │   ├── start_kubernetes.sh
 │   ├── start_longhorn.sh
 │   ├── start_kafka_prereq.sh
+│   ├── start_hadoop_prereq.sh
 │   ├── start_terraform.sh
 │   ├── start_helm.sh
 │   └── start_buildkitd.sh
@@ -333,7 +340,7 @@ Infrastructure-as-Code-Ansible/
 └── roles/                   # 실제 서버 설정 작업
     ├── [OS 공통]            # 기본 OS 설정 및 공통 패키지
     ├── [Kubernetes]         # Kubernetes 클러스터 구성
-    ├── [선행작업]           # Longhorn / Kafka 사전 준비
+    ├── [선행작업]           # Longhorn / Kafka / Hadoop 사전 준비
     └── [도구]               # Terraform / Helm / BuildKit 설치
 ```
 > **roles/ 디렉토리는 기능별 모듈 구조로 구성되며, 각 role은 tasks/main.yml을 기준으로 실행됩니다.**
@@ -580,7 +587,9 @@ class CallbackModule(CallbackBase):
 | `Ubuntu_Servers` | ap / s1 / s2 | ubuntu |
 | `kubernetes` (`kubernetes_master`=ap / `kubernetes_workers`=s1, s2) | ap / s1 / s2 | k8s |
 | `longhorn`  | ap / s1 / s2 | longhorn  |
-| `terraform` / `helm` / `buildkitd` | s2 | terraform / helm / buildkitd |
+| `kafka` | ap / s1 / s2 | kafka_prereq |
+| `hadoop` | ap / s1 / s2 | hadoop_prereq |
+| `terraform` / `helm` / `buildkitd` | ap / s2 | terraform / helm / buildkitd |
 
 ---
 </br>
@@ -609,6 +618,11 @@ class CallbackModule(CallbackBase):
 #   → 로컬 PV 디렉토리 2종(/data/kafka-controller, /data/kafka-broker)을 
 #   → root:root 2770(setgid) 으로 만들고 권한까지 검증한다.
 /my_project/Infrastructure-as-Code-Ansible/bin/start_kafka_prereq.sh /my_project/Infrastructure-as-Code-Ansible all
+
+# Hadoop 노드 선행작업 (hadoop_prereq_ansible.yml)
+#   → 로컬 PV 디렉토리 4종(/data/hadoop-{zookeeper,journalnode,namenode,datanode})을
+#   → root:root 2770(setgid) 으로 만들고 권한까지 검증한다.
+/my_project/Infrastructure-as-Code-Ansible/bin/start_hadoop_prereq.sh /my_project/Infrastructure-as-Code-Ansible all
 
 # BuildKit 설치 (buildkitd_ansible.yml) → docker 없는 이미지 빌드/push 데몬
 /my_project/Infrastructure-as-Code-Ansible/bin/start_buildkitd.sh /my_project/Infrastructure-as-Code-Ansible all
@@ -703,7 +717,7 @@ ansible-playbook ubuntu_ansible.yml --tags etc_hosts
 
 ### 주요 역할
 
-- `s2` 배포용 머신에 **Terraform 설치**
+- `ap` / `s2` 배포용 머신에 **Terraform 설치**
 - HashiCorp 저장소 등록
 - 지정된 Terraform 버전 설치 및 **버전 고정(hold)**
 - 설치 후 버전 정상 여부 검증
@@ -730,7 +744,7 @@ ansible-playbook ubuntu_ansible.yml --tags etc_hosts
 
 ### 주요 역할
 
-- `s2` 배포용 머신에 **Helm 설치**
+- `ap` / `s2` 배포용 머신에 **Helm 설치** (`ap` 는 `k8s_cilium` 롤이 CNI 설치에 helm CLI 를 쓰기 때문에 필수)
 - 공식 `Helm CDN`에서 바이너리 다운로드
 - `SHA256` 체크섬으로 파일 검증
 - `/usr/local/bin/helm`에 설치 및 버전 고정
@@ -762,7 +776,7 @@ ansible-playbook ubuntu_ansible.yml --tags etc_hosts
 - `ap / s1 / s2`에 `Kafka`용 디렉토리 생성
   - `/data/kafka-controller` → KRaft 컨트롤러 데이터
   - `/data/kafka-broker` → Kafka 토픽 로그
-- 디렉토리의 **소유자와 권한을 검증**
+- 디렉토리의 **존재 · 디렉토리 여부 · 그룹 쓰기 권한을 검증**(소유자와 setgid 는 설정만 하고 검증하지 않음)
 - 경로 / 소유 / 권한은 `group_vars/kafka.yml`에서 관리
 
 ---
@@ -784,8 +798,49 @@ kafka_prereq
 - **[중요] 노드를 추가할 때도 반드시 이 플레이북을 먼저 실행**
   - **디렉토리 준비 없이 Kafka 노드만 추가하면 PV 마운트에 실패할 수 있음**
 - Kafka 설정과 토픽은 `301-kafka`에서 관리
-  - `kafka.nodes` → 브로커 ID ↔ 노드 ↔ 노드 IP 고정표 (인덱스 = 브로커 ID = 파드 ordinal)
+  - `global.kafka.brokers`(저장소 루트 `values.common.yaml`) → 브로커 ID ↔ 노드 ↔ 노드 IP 고정표 (인덱스 = 브로커 ID = 파드 ordinal)
   - `topics` → **Kafka 토픽** (helm hook Job)
+
+---
+</br>
+
+## 📜 Hadoop 플레이북 (`hadoop_prereq_ansible.yml`)
+
+> **HDFS HA 는 Kubernetes 의 StatefulSet(Terraform 저장소 `301-hadoop`)이고, 이 플레이북은 Hadoop 이 사용할 노드의 저장공간만 미리 준비합니다.**
+
+---
+
+### 주요 역할
+
+- `ap / s1 / s2`에 `Hadoop`용 디렉토리 생성
+  - `/data/hadoop-zookeeper` → ZooKeeper 앙상블 데이터 (NameNode HA 쿼럼)
+  - `/data/hadoop-journalnode` → NameNode 공유 edits 로그
+  - `/data/hadoop-namenode` → fsimage / edits
+  - `/data/hadoop-datanode` → HDFS 블록
+- 디렉토리의 **존재 · 디렉토리 여부 · 그룹 쓰기 권한을 검증**(소유자와 setgid 는 설정만 하고 검증하지 않음)
+- 경로 / 소유 / 권한은 `group_vars/hadoop.yml`에서 관리
+
+---
+
+### 주의사항
+
+- 디렉토리 권한은 **`2770`이 중요** (`kafka_prereq`와 같은 값·같은 이유 — kubelet 의 fsGroup 처리가 켜는 setgid 비트와 같게 두어 재실행 때 재귀 chown 이 반복되지 않게 한다)
+  - Hadoop 컨테이너가 비루트(uid 1000)로 실행되므로 그룹 쓰기 권한이 필요함
+  - DataNode 는 `dfs.datanode.data.dir.perm=770`으로 이 모드와 짝을 맞춰 두었으므로 **모드를 바꾸면 차트 값도 함께 바꿔야 함**
+
+- **설치 순서**
+```text
+hadoop_prereq
+    ↓
+    ↓
+301-hadoop (HDFS HA)
+```
+
+- **[중요] 노드를 추가할 때도 반드시 이 플레이북을 먼저 실행**
+  - **디렉토리 준비 없이 Hadoop 노드만 추가하면 PV 마운트에 실패할 수 있음**
+- 구성요소별 노드 배치는 `301-hadoop`이 관리
+  - `global.hadoop.<구성요소>.nodeNames` → 파드 ordinal ↔ 노드 고정표 (NameNode 는 `ap`·`s1` 2대)
+  - 디렉토리는 3대에 모두 만든다 — 빈 디렉토리는 무해하고 NameNode 를 옮길 때 선행작업을 다시 챙기지 않아도 됨
 
 ---
 </br>
@@ -798,7 +853,7 @@ kafka_prereq
 
 ### 주요 역할
 
-- `s2` 빌드 머신에 **BuildKit 설치**
+- `ap` / `s2` 빌드 머신에 **BuildKit 설치**
 - `runc` 설치 여부 확인 및 필요 시 설치
 - BuildKit 데몬(`buildkitd`)을 **systemd 서비스로 등록·실행**
 - `buildctl` 명령어 설치
@@ -873,7 +928,7 @@ kafka_prereq
   - 클러스터를 다시 구성하려면 `k8s_reset`으로 기존 클러스터를 먼저 제거
 
 - `collection_check`는 **설치가 아니라 존재 여부만 확인**
-  - 없으면 직접 설치: `ansible-galaxy collection install ansible.posix community.general`
+  - 없으면 직접 설치: `ansible-galaxy collection install ansible.posix community.general kubernetes.core`
 - `containerd`와 `runc`는 **호환되는 버전으로 함께 설치/고정**
   - 버전을 변경한 경우 노드 재부팅 필요
   - 운영 중인 클러스터에서는 `--limit`으로 **한 노드씩 순차 적용 권장**
@@ -960,7 +1015,7 @@ fail_msg: "[FAIL] sshpass install failed"
 </br>
 
 ## 📚 Roles 설명
-> **롤 33종 → 플레이북 실행 순서대로 정리했습니다.**
+> **롤 35종 → 플레이북 실행 순서대로 정리했습니다.**
 
 - 변수로 동작이 갈리는 롤은 그 값이 `group_vars/<그룹>.yml` 에 있고
 - 나머지는 값이 롤 안에 고정돼 있습니다. `disable_swap`·`k8s_reset` 둘은 평소 주석 상태(의도된 비활성)입니다.
@@ -1059,7 +1114,9 @@ fail_msg: "[FAIL] sshpass install failed"
 ---
 </br>
 
-## **▸ `k8s_ansible.yml` → 클러스터 구성 (롤 6개 + 해체용 `k8s_reset`)**
+## **▸ `k8s_ansible.yml` → 클러스터 구성 (롤 8개 + 해체용 `k8s_reset`)**
+
+> `helm` 도 이 플레이북의 8개 중 하나이지만(`k8s_cilium` 이 CNI 설치에 사용), 설명은 아래 **노드 선행작업 / 도구 설치** 절에 있습니다.
 
 ---
 
@@ -1086,7 +1143,7 @@ fail_msg: "[FAIL] sshpass install failed"
 
 ### 🔹 k8s_cilium → [`📂 k8s_cilium.md`](./roles/k8s_cilium/tasks/k8s_cilium.md)
 - CNI 설치 — Cilium (eBPF + Native Routing + kube-proxy Replacement) + Hubble 관측성. Helm으로 배포하며 노드가 `Ready` 가 되는 것까지 검증한다 (`group_vars/kubernetes.yml` 의 `cilium_version`, `cilium_device`, `cilium_hubble_enabled`, `cilium_hubble_ui_enabled` 기준)
-- Hubble UI 접속: `kubectl -n kube-system port-forward svc/hubble-ui 12000:80 --address 0.0.0.0` → `http://192.168.56.200:12000`
+- Hubble UI 접속: `kubectl -n kube-system port-forward svc/hubble-ui 12000:80 --address 0.0.0.0` → `http://192.168.56.38:12000`
 ---
 
 ### 🔹 k8s_worker → [`📂 k8s_worker.md`](./roles/k8s_worker/tasks/k8s_worker.md)
@@ -1104,6 +1161,7 @@ fail_msg: "[FAIL] sshpass install failed"
 - `terraform_ansible.yml`
 - `helm_ansible.yml`
 - `kafka_prereq_ansible.yml`
+- `hadoop_prereq_ansible.yml`
 - `buildkitd_ansible.yml`
 
 ---
@@ -1123,6 +1181,11 @@ fail_msg: "[FAIL] sshpass install failed"
 ### 🔹 kafka_prereq → [`📂 kafka_prereq.md`](./roles/kafka_prereq/tasks/kafka_prereq.md)
 - Terraform `301-kafka`(StatefulSet)가 정적 local PV 로 쓰는 노드 디렉토리 2종 생성 + 권한 검증 → `/data/kafka-controller` + `/data/kafka-broker` (`group_vars/kafka.yml` 기준, 멱등)
 - **[주의]** 모드 `2770`(그룹 쓰기 + setgid)이 없으면 Kafka 파드가 CrashLoopBackOff 이거나 재기동마다 데이터 전체를 재귀 chown 한다. 브로커 설치 자체는 이 저장소 범위 밖이다
+---
+
+### 🔹 hadoop_prereq → [`📂 hadoop_prereq.md`](./roles/hadoop_prereq/tasks/hadoop_prereq.md)
+- Terraform `301-hadoop`(HDFS HA StatefulSet 4종)이 정적 local PV 로 쓰는 노드 디렉토리 4종 생성 + 권한 검증 → `/data/hadoop-{zookeeper,journalnode,namenode,datanode}` (`group_vars/hadoop.yml` 기준, 멱등)
+- **[주의]** `kafka_prereq` 와 같은 `2770` 이며, DataNode 의 `dfs.datanode.data.dir.perm=770` 과 짝이라 한쪽만 바꾸면 안 된다. Hadoop 기동 자체는 이 저장소 범위 밖이다
 ---
 
 ### 🔹 buildkitd → [`📂 buildkitd.md`](./roles/buildkitd/tasks/buildkitd.md)

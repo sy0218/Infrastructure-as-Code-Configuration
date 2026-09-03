@@ -1,0 +1,51 @@
+# =========================================================================
+# Hadoop 노드 선행작업 → 301-hadoop(StatefulSet) 로컬 PV 디렉토리 준비
+# =========================================================================
+
+
+# -------------------------------------------------------------------------
+# 1. 디렉토리 생성 (file 모듈 자체가 멱등)
+# -------------------------------------------------------------------------
+- name: "Create hadoop local PV directories"
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ hadoop_data_owner }}"
+    group: "{{ hadoop_data_group }}"
+    mode: "{{ hadoop_data_mode }}"
+  loop:
+    - "{{ hadoop_zookeeper_data_dir }}" # ZooKeeper 앙상블 데이터 (HA 쿼럼)
+    - "{{ hadoop_journalnode_data_dir }}" # NameNode 공유 edits 로그
+    - "{{ hadoop_namenode_data_dir }}" # fsimage / edits
+    - "{{ hadoop_datanode_data_dir }}" # HDFS 블록
+
+# -------------------------------------------------------------------------
+# 2. 검증
+# -------------------------------------------------------------------------
+# 디렉토리가 실제로 존재하고 그룹 쓰기가 열려 있는지
+# 둘 중 하나만 어긋나도
+# → 증상이 "파드가 안 뜬다" 로만 보여서 원인을 찾는 데 시간이 걸린다.
+# -------------------------------------------------------------------------
+- name: "Check hadoop local PV directories"
+  stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ hadoop_zookeeper_data_dir }}"
+    - "{{ hadoop_journalnode_data_dir }}"
+    - "{{ hadoop_namenode_data_dir }}"
+    - "{{ hadoop_datanode_data_dir }}"
+  register: hadoop_dirs
+  changed_when: false
+  failed_when: false
+
+- name: "Assert hadoop local PV directories are usable"
+  assert:
+    that:
+      - item.stat.exists
+      - item.stat.isdir
+      - item.stat.wgrp # 그룹 쓰기 — 컨테이너가 uid 1000 + gid 0 으로 붙는다
+    success_msg: "Good!.. | dir ready: {{ item.item }} (mode {{ item.stat.mode | default('?') }})"
+    fail_msg: "ERROR!.. | dir NOT usable: {{ item.item }} → 301-hadoop 파드가 local PV 마운트/쓰기에 실패해 기동하지 못한다"
+  loop: "{{ hadoop_dirs.results }}"
+  loop_control:
+    label: "{{ item.item }}"

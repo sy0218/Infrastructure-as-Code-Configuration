@@ -46,6 +46,13 @@ all:
         s1:
         s2:
 
+    # hadoop 그룹은 로컬 PV 디렉토리 선행작업(hadoop_prereq) 대상이다
+    hadoop:
+      hosts:
+        ap:
+        s1:
+        s2:
+
     buildkitd:
       hosts:
         ap: # 빌드 머신

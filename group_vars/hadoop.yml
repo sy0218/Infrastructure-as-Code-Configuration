@@ -1,0 +1,29 @@
+# =====================================================
+# [Hadoop 노드 선행작업 변수]
+# =====================================================
+# HDFS HA StatefulSet(301-hadoop)의 Local PV 저장 경로
+# → 301-hadoop의 Local PV 경로와 동일하게 설정
+# =====================================================
+
+
+# -----------------------------------------------------
+# Hadoop 데이터 저장 경로 (구성요소 4종 = STS 4종)
+# hadoop_zookeeper_data_dir    → ZooKeeper 앙상블 데이터(myid·스냅샷)
+# hadoop_journalnode_data_dir  → NameNode 공유 edits 로그
+# hadoop_namenode_data_dir     → fsimage / edits (ap / s1 에만 PV 가 있다)
+# hadoop_datanode_data_dir     → HDFS 블록
+# -----------------------------------------------------
+hadoop_zookeeper_data_dir: /data/hadoop-zookeeper
+hadoop_journalnode_data_dir: /data/hadoop-journalnode
+hadoop_namenode_data_dir: /data/hadoop-namenode
+hadoop_datanode_data_dir: /data/hadoop-datanode
+
+
+# -----------------------------------------------------
+# 디렉토리 권한
+# Hadoop 컨테이너가 비루트(uid 1000 hadoop)로 실행되므로 root 소유 + 그룹 쓰기 권한 적용
+# 2770(setgid): 하위 파일/디렉토리도 root 그룹 권한을 유지
+# -----------------------------------------------------
+hadoop_data_owner: root
+hadoop_data_group: root
+hadoop_data_mode: '2770'
