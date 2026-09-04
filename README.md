@@ -315,6 +315,7 @@ Infrastructure-as-Code-Ansible/
 ├── longhorn_ansible.yml     # Longhorn 노드 사전 준비
 ├── kafka_prereq_ansible.yml # Kafka Local PV 사전 준비
 ├── hadoop_prereq_ansible.yml # Hadoop Local PV 사전 준비
+├── airflow_repo_prereq_ansible.yml # Airflow DAG hostPath 디렉토리 + rsync
 ├── terraform_ansible.yml    # Terraform 설치
 ├── helm_ansible.yml         # Helm 설치
 ├── buildkitd_ansible.yml    # BuildKit 설치
@@ -326,6 +327,7 @@ Infrastructure-as-Code-Ansible/
 │   ├── start_longhorn.sh
 │   ├── start_kafka_prereq.sh
 │   ├── start_hadoop_prereq.sh
+│   ├── start_airflow_repo_prereq.sh
 │   ├── start_terraform.sh
 │   ├── start_helm.sh
 │   └── start_buildkitd.sh
@@ -589,6 +591,7 @@ class CallbackModule(CallbackBase):
 | `longhorn`  | ap / s1 / s2 | longhorn  |
 | `kafka` | ap / s1 / s2 | kafka_prereq |
 | `hadoop` | ap / s1 / s2 | hadoop_prereq |
+| `airflow` | ap / s1 / s2 | airflow_repo_prereq |
 | `terraform` / `helm` / `buildkitd` | ap / s2 | terraform / helm / buildkitd |
 
 ---
@@ -623,6 +626,9 @@ class CallbackModule(CallbackBase):
 #   → 로컬 PV 디렉토리 4종(/data/hadoop-{zookeeper,journalnode,namenode,datanode})을
 #   → root:root 2770(setgid) 으로 만들고 권한까지 검증한다.
 /my_project/Infrastructure-as-Code-Ansible/bin/start_hadoop_prereq.sh /my_project/Infrastructure-as-Code-Ansible all
+
+# Airflow 노드 선행작업 (airflow_repo_prereq_ansible.yml) — 304-airflow 선행. DAG 수정 후 반영은 TARGET=sync
+/my_project/Infrastructure-as-Code-Ansible/bin/start_airflow_repo_prereq.sh /my_project/Infrastructure-as-Code-Ansible all
 
 # BuildKit 설치 (buildkitd_ansible.yml) → docker 없는 이미지 빌드/push 데몬
 /my_project/Infrastructure-as-Code-Ansible/bin/start_buildkitd.sh /my_project/Infrastructure-as-Code-Ansible all

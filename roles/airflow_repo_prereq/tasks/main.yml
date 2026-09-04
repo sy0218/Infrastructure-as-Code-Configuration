@@ -1,0 +1,55 @@
+# =========================================================================
+# Airflow 노드 선행작업 → 304-airflow 가 hostPath 로 마운트하는 DAG/코드 디렉토리 준비 + rsync
+# =========================================================================
+
+
+# -------------------------------------------------------------------------
+# 1. 디렉토리 생성 (file 모듈 자체가 멱등)
+# -------------------------------------------------------------------------
+- name: "Create airflow repo directory"
+  file:
+    path: "{{ airflow_repo_dir }}"
+    state: directory
+    owner: "{{ airflow_repo_owner }}"
+    group: "{{ airflow_repo_group }}"
+    mode: "{{ airflow_repo_mode }}"
+
+# -------------------------------------------------------------------------
+# 2. 코드 동기화 (sync 태그 — DAG 수정 후에는 이 태스크만 다시 돌린다)
+#    컨트롤 노드에서 rsync 를 직접 띄운다: synchronize 모듈은 rsync 가 스스로 접속해야 해서
+#    비밀번호 SSH(ansible_user=project)를 못 타고, 이 랩은 root 키 SSH 가 노드 간에 열려 있다.
+# -------------------------------------------------------------------------
+- name: "Sync airflow repo to node"
+  command: >-
+    rsync {{ airflow_repo_sync_opts | join(' ') }}
+    {{ airflow_repo_sync_excludes | map('regex_replace', '^(.*)$', '--exclude=\1') | join(' ') }}
+    {{ airflow_repo_src }}/ root@{{ ansible_host }}:{{ airflow_repo_dir }}/
+  delegate_to: localhost
+  become: false
+  register: airflow_repo_sync
+  changed_when: airflow_repo_sync.stdout != ''
+  tags: [sync]
+
+# -------------------------------------------------------------------------
+# 3. 검증
+#    없으면 hostPath type: Directory 검사에 걸려 파드가 아예 뜨지 않고,
+#    남이 못 읽으면 파드는 뜨는데 DAG 만 0개가 된다 — 둘 다 여기서 미리 잡는다.
+# -------------------------------------------------------------------------
+- name: "Check airflow repo directory"
+  stat:
+    path: "{{ airflow_repo_dir }}/dags"
+  register: airflow_repo_dags
+  changed_when: false
+  failed_when: false
+  tags: [sync]
+
+- name: "Assert airflow repo directory is readable by the container"
+  assert:
+    that:
+      - airflow_repo_dags.stat.exists
+      - airflow_repo_dags.stat.isdir
+      - airflow_repo_dags.stat.roth # 남 읽기 — 컨테이너는 uid 50000 으로 읽는다
+      - airflow_repo_dags.stat.xoth
+    success_msg: "Good!.. | repo ready: {{ airflow_repo_dir }}/dags (mode {{ airflow_repo_dags.stat.mode | default('?') }})"
+    fail_msg: "ERROR!.. | repo NOT usable: {{ airflow_repo_dir }}/dags → 304-airflow 파드가 hostPath 마운트에 실패하거나 DAG 0개가 된다 (sync 태그를 먼저 돌렸는가?)"
+  tags: [sync]

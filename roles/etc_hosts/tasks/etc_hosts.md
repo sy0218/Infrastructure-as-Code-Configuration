@@ -141,16 +141,17 @@
 되지 않는다**. `.local` 을 뗀 이유는 mDNS 전용 예약 도메인(RFC 6762)이라
 systemd-resolved/Avahi 가 질의를 가로챌 수 있어서다.
 
-#### ① 노드 IP 계열 — `data_layer_dns_names` (이름 2개 × 노드 수 = 3줄)
+#### ① 노드 IP 계열 — `data_layer_dns_names` (이름 1개 × 노드 수 = 3줄)
 - 이름 하나가 **노드 IP 전부**를 A 레코드로 갖는다 (`<노드IP> 이름1 이름2 ...`)
 - **장애 전환 주체는 클라이언트다** — 죽은 IP 로 먼저 붙으면 TCP 타임아웃을 기다린 뒤
   다음 IP 로 넘어간다. glibc 가 여러 주소를 반환하려면 `/etc/host.conf` 에
   `multi on`(Ubuntu 기본값)이 있어야 한다
-- 여기 남은 이유: 둘 다 **K8s 밖 노드 로컬 설치**라 Service 객체가 없어 인그레스를 끼울
-  대상 자체가 없다 — `data-layer-minio-console` 은 노드가 직접 여는 :9001,
-  `data-layer-neo4j` 는 `ap` 노드의 systemd 서비스다
+- 여기 남은 이유: **K8s 밖 노드 로컬 설치**라 Service 객체가 없어 인그레스를 끼울
+  대상 자체가 없다 — `data-layer-neo4j` 는 `ap` 노드의 systemd 서비스다
   (K8s 로 복귀한 postgres 의 외부 접속은 hosts 이름 없이
-  전용 VIP — Terraform 102-ingress `postgres_vip`:5432 — 로 한다)
+  전용 VIP — Terraform 102-ingress `postgres_vip`:5432 — 로 한다.
+  `data-layer-minio-console` 은 MinIO 가 301-minio(클러스터 내부 전용, 콘솔 off)로 옮겨 가며 뺐다 —
+  노드가 여는 :9001 이 더는 없다)
 
 #### ② VIP 계열 — `data_layer_vip_dns_names` (이름 7개, 총 1줄)
 - 이름 전부가 **인그레스 VIP 하나**(`ingress_vip`)를 가리킨다

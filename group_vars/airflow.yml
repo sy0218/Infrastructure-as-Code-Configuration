@@ -1,0 +1,48 @@
+# =====================================================
+# [Airflow 노드 선행작업 변수]
+# =====================================================
+# 304-airflow 가 DAG·커스텀 패키지를 읽는 노드 로컬 디렉토리(hostPath)
+# → 304-airflow values.yaml 의 repo.hostPath 와 글자 그대로 같아야 한다
+# =====================================================
+
+
+# -----------------------------------------------------
+# 노드 쪽 디렉토리 (hostPath 대상) / 컨트롤 노드 쪽 원본 (rsync 소스)
+# airflow_repo_src 는 컨트롤 노드의 data_pipeline 저장소 위치다(이 랩은 /project)
+# -----------------------------------------------------
+airflow_repo_dir: /data/airflow-repo
+airflow_repo_src: /project/data_pipeline/data_layer_airflow
+
+
+# -----------------------------------------------------
+# 디렉토리 권한
+# 컨테이너(uid 50000)는 readOnly 마운트로 읽기만 한다 → root 소유 + 0755
+# kafka/hadoop 의 2770 과 다른 이유: 노드에 쓰는 주체가 rsync(root)뿐이라 그룹 쓰기가 필요 없다
+# -----------------------------------------------------
+airflow_repo_owner: root
+airflow_repo_group: root
+airflow_repo_mode: '0755'
+
+
+# -----------------------------------------------------
+# rsync 옵션 (sync 태그)
+# --delay-updates/--delete-delay : dag-processor 가 30초마다 훑는 동안 반쯤 바뀐 트리를 보지 않게 한꺼번에 교체
+# --chmod=Da+rx,Fa+r             : 원본이 0700/0600 이어도 노드에서는 uid 50000 이 읽을 수 있게 더하기만 한다
+# -----------------------------------------------------
+airflow_repo_sync_opts:
+  - --archive
+  - --delete
+  - --delay-updates
+  - --delete-delay
+  - --chmod=Da+rx,Fa+r
+
+# rsync 제외 목록
+# airflow.env : Secret airflow-env 의 값 원본이라 노드 디스크에 평문으로 남길 이유가 없다
+# logs/       : 로그는 WebHDFS 로 나간다 — 노드에 둘 이유가 없고 컨테이너도 마운트하지 않는다
+airflow_repo_sync_excludes:
+  - .git/
+  - logs/
+  - __pycache__/
+  - '*.pyc'
+  - '*.env'
+  - '.env*'
