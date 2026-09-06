@@ -28,9 +28,9 @@ run_cmd "cd ${ANSIBLE_HOME}"
 
 # ansible 플레이북 실행
 if [ "${TARGET}" = "all" ]; then
-    run_cmd "ansible-playbook ubuntu_ansible.yml"
+    run_cmd "ansible-playbook server_configuration_ansible.yml"
 else
-    run_cmd "ansible-playbook ubuntu_ansible.yml --tags ${TARGET}"
+    run_cmd "ansible-playbook server_configuration_ansible.yml --tags ${TARGET}"
 fi
 
 log "===== END ansible end ====="

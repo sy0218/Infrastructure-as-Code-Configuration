@@ -8,8 +8,8 @@
 
 # -----------------------------------------------------
 # Kafka 데이터 저장 경로
-# kafka_broker_data_dir      → 브로커 토픽 데이터
-# kafka_controller_data_dir  → KRaft 메타데이터 로그
+#   - kafka_broker_data_dir      → 브로커 토픽 데이터
+#   - kafka_controller_data_dir  → KRaft 메타데이터 로그
 # -----------------------------------------------------
 kafka_broker_data_dir: /data/kafka-broker
 kafka_controller_data_dir: /data/kafka-controller

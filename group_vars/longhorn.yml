@@ -1,6 +1,6 @@
 # ======================================= 
 # Longhorn 노드 사전 준비 (longhorn_prereq 사용)
-# → 사용 가능 버전 확인: apt-cache madison open-iscsi
+#   → 사용 가능 버전 확인: apt-cache madison open-iscsi
 # =======================================
 open_iscsi_version: "2.1.9-3ubuntu4" # noble 기본 아카이브 버전
 longhorn_data_path: /data/longhorn # Longhorn 설치 시 defaultDataPath와 일치시켜야 함

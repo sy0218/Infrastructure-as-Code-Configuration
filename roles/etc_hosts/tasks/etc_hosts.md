@@ -26,11 +26,11 @@
       127.0.0.1   localhost
       ::1         localhost
 
-      {% for host in groups['Ubuntu_Servers'] %}
+      {% for host in groups['server_configuration'] %}
       {{ hostvars[host]['ansible_host'] }} {{ host }}
       {% endfor %}
 
-      {% for host in groups['Ubuntu_Servers'] %}
+      {% for host in groups['server_configuration'] %}
       {{ hostvars[host]['ansible_host'] }} {{ data_layer_dns_names | join(' ') }}
       {% endfor %}
 
@@ -42,7 +42,7 @@
 # -----------------------------------------------------
 - name: "Check /etc/hosts entries"
   command: "grep -F '{{ hostvars[item].ansible_host }} {{ item }}' /etc/hosts"
-  loop: "{{ groups['Ubuntu_Servers'] }}"
+  loop: "{{ groups['server_configuration'] }}"
   register: hosts_check
   changed_when: false
   failed_when: false
@@ -60,7 +60,7 @@
 # -----------------------------------------------------
 - name: "Check /etc/hosts data-layer DNS entries"
   command: "grep -F '{{ hostvars[item].ansible_host }} {{ data_layer_dns_names | join(' ') }}' /etc/hosts"
-  loop: "{{ groups['Ubuntu_Servers'] }}"
+  loop: "{{ groups['server_configuration'] }}"
   register: dns_hosts_check
   changed_when: false
   failed_when: false
@@ -85,9 +85,9 @@
 - name: "Assert /etc/hosts data-layer DNS name occurrence count"
   assert:
     that:
-      - dns_hosts_count.stdout | int == (data_layer_dns_names | length) * (groups['Ubuntu_Servers'] | length)
-    success_msg: "Good!.. | data-layer DNS name occurrences: {{ dns_hosts_count.stdout }} (names: {{ data_layer_dns_names | length }} x nodes: {{ groups['Ubuntu_Servers'] | length }})"
-    fail_msg: "ERROR!.. | data-layer DNS name occurrences={{ dns_hosts_count.stdout }} (expected {{ (data_layer_dns_names | length) * (groups['Ubuntu_Servers'] | length) }} = names {{ data_layer_dns_names | length }} x nodes {{ groups['Ubuntu_Servers'] | length }})"
+      - dns_hosts_count.stdout | int == (data_layer_dns_names | length) * (groups['server_configuration'] | length)
+    success_msg: "Good!.. | data-layer DNS name occurrences: {{ dns_hosts_count.stdout }} (names: {{ data_layer_dns_names | length }} x nodes: {{ groups['server_configuration'] | length }})"
+    fail_msg: "ERROR!.. | data-layer DNS name occurrences={{ dns_hosts_count.stdout }} (expected {{ (data_layer_dns_names | length) * (groups['server_configuration'] | length) }} = names {{ data_layer_dns_names | length }} x nodes {{ groups['server_configuration'] | length }})"
 
 # -----------------------------------------------------
 # 5. data-layer DNS 이름 검증 (VIP 계열)
@@ -130,7 +130,7 @@
 - localhost, IPv6 localhost 기본 항목 포함, 소유자 root / 권한 0644
 ---
 ### 2️⃣ 인벤토리 기반 호스트 등록
-- 인벤토리 그룹 Ubuntu_Servers 기준
+- 인벤토리 그룹 server_configuration 기준
 - 각 서버의 ansible_host(IP)와 호스트명을 매핑하여 자동 추가
 - 모든 서버에서 동일한 /etc/hosts 파일 유지
 ---

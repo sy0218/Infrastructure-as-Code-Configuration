@@ -38,7 +38,7 @@
   set_fact:
     all_public_keys: >-
       {{
-        groups['Ubuntu_Servers']
+        groups['server_configuration']
         | map('extract', hostvars, 'my_public_key')
         | list
       }}
@@ -86,7 +86,7 @@
 - 이후 서버 간 공개키 수집에 사용
 ---
 ### 3️⃣ 모든 서버 공개키 수집
-- 인벤토리 그룹 Ubuntu_Servers 기준
+- 인벤토리 그룹 server_configuration 기준
 - `hostvars`를 사용하여 모든 서버의 공개키를 리스트로 취합
 ---
 ### 4️⃣ 공개키 상호 배포

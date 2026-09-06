@@ -30,7 +30,7 @@
   set_fact:
     all_public_keys: >-
       {{
-        groups['Ubuntu_Servers']
+        groups['server_configuration']
         | map('extract', hostvars, 'my_public_key')
         | list
       }}

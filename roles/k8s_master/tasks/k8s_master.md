@@ -159,7 +159,7 @@ kubernetes_swap_behavior: "LimitedSwap"
 kubernetes_admin_user: "root" # 마스터에서 kubectl 사용할 계정 (.kube/config 배포 대상)
 ```
 ```yaml
-# group_vars/Ubuntu_Servers.yml — 스왑 검증에만 참조 (enable_swap 롤이 만든 경로)
+# group_vars/server_configuration.yml — 스왑 검증에만 참조 (enable_swap 롤이 만든 경로)
 swap_file_path: /swap.img
 ```
 - 노드 IP(`ansible_host`)는 인벤토리 `host.yml` 값이다 — `gather_facts: false` 라 facts로는 얻을 수 없다.

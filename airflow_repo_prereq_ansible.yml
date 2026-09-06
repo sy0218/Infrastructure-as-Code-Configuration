@@ -4,9 +4,9 @@
 #
 # 범위: 디렉토리 준비(멱등) + 컨트롤 노드 원본 → 3노드 rsync.
 #   all  : 디렉토리 생성 + 동기화 + 검증
-#   sync : 동기화 + 검증만 — DAG 을 고친 뒤 반영은 이것뿐이다(재빌드·helm upgrade 없음)
+#   sync : 동기화 + 검증만 → DAG 을 고친 뒤 반영은 이것뿐이다(재빌드·helm upgrade 없음)
 #
-# 스케줄 가능한 모든 노드가 대상이다 — hostPath type: Directory 라 경로 없는 노드에 뜬 파드는 기동하지 못한다.
+# 스케줄 가능한 모든 노드가 대상이다 → hostPath type: Directory 라 경로 없는 노드에 뜬 파드는 기동하지 못한다.
 # =====================================================
 - name: "[ Airflow Repo Prereq.. ]"
   hosts: airflow

@@ -1,6 +1,6 @@
 # =======================================
 # Terraform 설치 버전 고정 (terraform 사용)
-# → 사용 가능 버전 확인: apt-cache madison terraform (저장소 등록 후)
+#   → 사용 가능 버전 확인: apt-cache madison terraform (저장소 등록 후)
 # =======================================
 terraform_version: "1.15.8-1" # HashiCorp apt 패키지 버전
 hashicorp_repo_release: "noble"

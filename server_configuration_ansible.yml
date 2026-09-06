@@ -11,10 +11,10 @@
 
 
 # =====================================================
-# Ubuntu Servers
+# Server Configuration
 # =====================================================
-- name: "[ Ubuntu_Servers Settings.. ]"
-  hosts: Ubuntu_Servers
+- name: "[ server_configuration Settings.. ]"
+  hosts: server_configuration
   become: true
   gather_facts: false
 
@@ -39,3 +39,4 @@
     - { role: bash_common,           tags: ['bash_common'] }
     - { role: ssh_keygen,            tags: ['ssh_keygen'] }
     - { role: etc_hosts,             tags: ['etc_hosts'] }
+    - { role: hostname,              tags: ['hostname'] }

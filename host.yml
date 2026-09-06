@@ -4,7 +4,7 @@ all:
       ansible_connection: local
       ansible_become_password: "1234"
   children:
-    Ubuntu_Servers:
+    server_configuration:
       hosts:
         ap:
           ansible_host: 192.168.56.38
@@ -29,15 +29,17 @@ all:
         s1:
         s2:
 
+    # terraform 설치
     terraform:
       hosts:
         ap:
-        s2:
 
+    # helm 설치
     helm:
+      # 1. k8s_cilium 롤이 CNI 설치에 helm 사용 (마스터에서 실행)
+      # 2. terraform 과 같은 배포 CLI 머신 (Helm 차트 스택 배포용)
       hosts:
-        ap: # k8s_cilium 롤이 CNI 설치에 helm 사용 (마스터에서 실행)
-        s2: # terraform 과 같은 배포 CLI 머신 (Helm 차트 스택 배포용)
+        ap:
 
     # kafka 그룹은 로컬 PV 디렉토리 선행작업(kafka_prereq) 대상이다
     kafka:
@@ -60,7 +62,7 @@ all:
         s1:
         s2:
 
+    # 이미지 빌드
     buildkitd:
       hosts:
         ap: # 빌드 머신
-        s2: # 빌드 머신

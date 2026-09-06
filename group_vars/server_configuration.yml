@@ -1,0 +1,91 @@
+# =======================================
+# Ansible 접속 / 권한
+# =======================================
+ansible_user: project
+ansible_ssh_pass: "1234"
+ansible_become_password: "1234"
+
+# =======================================
+# root 비밀번호
+# =======================================
+root_password: "1234"
+
+# =======================================
+# data-layer DNS 이름
+# =======================================
+# 노드 IP를 사용하는 서비스
+data_layer_dns_names:
+  - data-layer-neo4j
+
+# Ingress VIP를 사용하는 서비스
+#   → 모든 이름이 ingress_vip를 가리킴
+#   → MetalLB가 장애 시 VIP를 다른 노드로 이동
+data_layer_vip_dns_names:
+  - data-layer-harbor
+  - data-layer-kafka-ui
+  - data-layer-airflow
+  - data-layer-api
+  - data-layer-grafana
+  - data-layer-prometheus
+  - data-layer-headlamp
+
+# =======================================
+# Ingress VIP
+# =======================================
+# MetalLB L2가 노드에 광고하는 공통 진입 IP
+# → Terraform / Helm의 ingress VIP와 동일해야 함
+# → 노드망(192.168.56.0/24)에서 DHCP·노드 IP와 겹치지 않아야 함
+ingress_vip: 192.168.56.240
+
+# =======================================
+# 기본 패키지
+# =======================================
+install_packages:
+  - net-tools
+  - python3-pip
+  - jq
+  - apt-transport-https
+  - wget
+  - curl
+  - unzip
+  - python3-debian
+  - bash-completion
+
+# =======================================
+# logrotate 설정
+# =======================================
+# 주 1회 회전 / 4개 보관 / 회전 후 파일 생성
+logrotate_options:
+  - { regexp: '^(daily|weekly|monthly|yearly)$', line: 'weekly' }
+  - { regexp: '^rotate\s+\d+', line: 'rotate 4' }
+  - { regexp: '^create$', line: 'create' }
+  - { regexp: '^su\s+', line: 'su root adm' }
+  - { regexp: '^include\s+/etc/logrotate.d', line: 'include /etc/logrotate.d' }
+
+# =======================================
+# Java
+# =======================================
+# 노드 공용 JDK 버전
+java_version: "17"
+
+# =======================================
+# Swap
+# =======================================
+# Kubernetes 노드에서 사용할 Swap 파일
+swap_file_path: /swap.img
+swap_size_mb: "8192"
+
+# =======================================
+# project 환경변수 / Bash 설정
+# =======================================
+project_conf_path: /etc/project.conf
+
+# 공통 Bash 설정 적용 대상
+bashrc_targets:
+  - /root/.bashrc
+  - /etc/skel/.bashrc
+
+# project 공통 환경변수
+project_envs:
+  - JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+  - PATH=$JAVA_HOME/bin:$PATH

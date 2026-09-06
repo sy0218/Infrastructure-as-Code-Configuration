@@ -1,0 +1,43 @@
+# =====================================================
+# 호스트명 설정
+# =====================================================
+# - 인벤토리 이름(ap/s1/s2)을 OS 호스트명으로 설정
+# - kubeadm init/join 전에 적용해야 Kubernetes 노드명과 일치
+# - 변경 시 기존 클러스터는 reset 후 재구축 필요
+
+# -----------------------------------------------------
+# 1. 호스트명 설정
+#    - /etc/hostname 영속 반영 + 즉시 적용
+#    - 멱등성 보장
+# -----------------------------------------------------
+- name: "Set hostname to inventory name"
+  hostname:
+    name: "{{ inventory_hostname }}"
+    use: systemd
+
+# -----------------------------------------------------
+# 2. 호스트명 검증
+#    - 현재 호스트명 확인
+#    - inventory 이름이 노드 IP로 해석되는지 확인
+# -----------------------------------------------------
+- name: "Check current hostname"
+  command: hostname
+  register: hostname_check
+  changed_when: false
+
+- name: "Check hostname resolves to node IP"
+  command: "getent hosts {{ inventory_hostname }}"
+  register: hostname_resolve
+  changed_when: false
+  failed_when: false
+
+# -----------------------------------------------------
+# 3. 설정 결과 검증
+# -----------------------------------------------------
+- name: "Assert hostname applied"
+  assert:
+    that:
+      - hostname_check.stdout == inventory_hostname
+      - ansible_host in hostname_resolve.stdout
+    success_msg: "Good!.. | Hostname {{ hostname_check.stdout }} → {{ ansible_host }}"
+    fail_msg: "ERROR!.. | Hostname NOT applied (current: {{ hostname_check.stdout }}, resolve: {{ hostname_resolve.stdout }})"
