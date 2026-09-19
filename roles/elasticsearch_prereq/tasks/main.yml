@@ -1,0 +1,38 @@
+# =========================================================================
+# Elasticsearch 노드 선행작업 → 301-elasticsearch(StatefulSet) 로컬 PV 디렉토리 준비
+# =========================================================================
+
+
+# -------------------------------------------------------------------------
+# 1. 디렉토리 생성 (file 모듈 자체가 멱등)
+# -------------------------------------------------------------------------
+- name: "Create elasticsearch local PV directory"
+  file:
+    path: "{{ elasticsearch_data_dir }}"
+    state: directory
+    owner: "{{ elasticsearch_data_owner }}"
+    group: "{{ elasticsearch_data_group }}"
+    mode: "{{ elasticsearch_data_mode }}"
+
+# -------------------------------------------------------------------------
+# 2. 검증
+# -------------------------------------------------------------------------
+# 디렉토리가 실제로 존재하고 그룹 쓰기가 열려 있는지
+# 둘 중 하나만 어긋나도
+# → 증상이 "파드가 안 뜬다" 로만 보여서 원인을 찾는 데 시간이 걸린다.
+# -------------------------------------------------------------------------
+- name: "Check elasticsearch local PV directory"
+  stat:
+    path: "{{ elasticsearch_data_dir }}"
+  register: elasticsearch_dir
+  changed_when: false
+  failed_when: false
+
+- name: "Assert elasticsearch local PV directory is usable"
+  assert:
+    that:
+      - elasticsearch_dir.stat.exists
+      - elasticsearch_dir.stat.isdir
+      - elasticsearch_dir.stat.wgrp # 그룹 쓰기 — 컨테이너가 uid 1000 + gid 0 으로 붙는다
+    success_msg: "Good!.. | dir ready: {{ elasticsearch_data_dir }} (mode {{ elasticsearch_dir.stat.mode | default('?') }})"
+    fail_msg: "ERROR!.. | dir NOT usable: {{ elasticsearch_data_dir }} → 301-elasticsearch 파드가 local PV 마운트/쓰기에 실패해 기동하지 못한다"

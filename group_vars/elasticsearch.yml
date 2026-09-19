@@ -1,0 +1,22 @@
+# =====================================================
+# [Elasticsearch 노드 선행작업 변수]
+# =====================================================
+# Elasticsearch StatefulSet(301-elasticsearch)의 Local PV 저장 경로
+# → 301-elasticsearch values 의 data.path 와 글자 그대로 같아야 한다
+# =====================================================
+
+
+# -----------------------------------------------------
+# Elasticsearch 데이터 저장 경로 (인덱스 데이터)
+# -----------------------------------------------------
+elasticsearch_data_dir: /data/elasticsearch
+
+
+# -----------------------------------------------------
+# 디렉토리 권한
+# ES 컨테이너가 비루트(uid 1000 elasticsearch, gid 0)로 실행되므로 root 소유 + 그룹 쓰기 권한 적용
+# 2770(setgid): 하위 파일/디렉토리도 root 그룹 권한을 유지
+# -----------------------------------------------------
+elasticsearch_data_owner: root
+elasticsearch_data_group: root
+elasticsearch_data_mode: '2770'

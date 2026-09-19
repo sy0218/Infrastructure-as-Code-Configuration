@@ -55,6 +55,13 @@ all:
         s1:
         s2:
 
+    # elasticsearch 그룹은 로컬 PV 디렉토리 선행작업(elasticsearch_prereq) 대상이다
+    elasticsearch:
+      hosts:
+        ap:
+        s1:
+        s2:
+
     # airflow 그룹은 DAG/코드 hostPath 디렉토리 선행작업(airflow_repo_prereq) 대상이다 — 스케줄 가능한 전 노드
     airflow:
       hosts:
