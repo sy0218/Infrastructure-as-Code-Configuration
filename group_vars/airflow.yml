@@ -9,8 +9,10 @@
 # -----------------------------------------------------
 # 노드 쪽 디렉토리 (hostPath 대상) / 컨트롤 노드 쪽 원본 (rsync 소스)
 # airflow_repo_src 는 컨트롤 노드의 data_pipeline 저장소 위치다(이 랩은 /project)
+# 두 값이 같다 — 컨트롤 노드 ap 는 노드이기도 해서 원본 = 마운트 대상이고(rsync 가 자기 자신에 no-op,
+# --chmod 만 원본 모드를 넓힌다), s1/s2 에는 같은 경로로 사본이 놓인다. 제외 목록(*.env·logs/)은 --delete 에서도 보호된다.
 # -----------------------------------------------------
-airflow_repo_dir: /data/airflow-repo
+airflow_repo_dir: /project/data_pipeline/data_layer_airflow
 airflow_repo_src: /project/data_pipeline/data_layer_airflow
 
 
