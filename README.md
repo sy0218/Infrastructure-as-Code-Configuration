@@ -252,6 +252,7 @@ Infrastructure-as-Code-Ansible/
 │   ├── kafka.yml            # Kafka Local PV 경로
 │   ├── hadoop.yml           # Hadoop Local PV 경로
 │   ├── elasticsearch.yml    # Elasticsearch Local PV 경로
+│   ├── rustfs.yml           # RustFS Local PV 경로
 │   ├── terraform.yml        # Terraform 버전
 │   ├── helm.yml             # Helm 버전
 │   └── buildkitd.yml        # BuildKit 버전 및 설정
@@ -262,6 +263,7 @@ Infrastructure-as-Code-Ansible/
 ├── kafka_prereq_ansible.yml # Kafka Local PV 사전 준비
 ├── hadoop_prereq_ansible.yml # Hadoop Local PV 사전 준비
 ├── elasticsearch_prereq_ansible.yml # Elasticsearch Local PV 사전 준비
+├── rustfs_prereq_ansible.yml # RustFS Local PV 사전 준비
 ├── airflow_repo_prereq_ansible.yml # Airflow DAG hostPath 디렉토리 + rsync
 ├── terraform_ansible.yml    # Terraform 설치
 ├── helm_ansible.yml         # Helm 설치
@@ -275,6 +277,7 @@ Infrastructure-as-Code-Ansible/
 │   ├── start_kafka_prereq.sh
 │   ├── start_hadoop_prereq.sh
 │   ├── start_elasticsearch_prereq.sh
+│   ├── start_rustfs_prereq.sh
 │   ├── start_airflow_repo_prereq.sh
 │   ├── start_terraform.sh
 │   ├── start_helm.sh
@@ -290,7 +293,7 @@ Infrastructure-as-Code-Ansible/
 └── roles/                   # 실제 서버 설정 작업
     ├── [OS 공통]            # 기본 OS 설정 및 공통 패키지
     ├── [Kubernetes]         # Kubernetes 클러스터 구성
-    ├── [선행작업]           # Longhorn / Kafka / Hadoop / Elasticsearch 사전 준비
+    ├── [선행작업]           # Longhorn / Kafka / Hadoop / Elasticsearch / RustFS 사전 준비
     └── [도구]               # Terraform / Helm / BuildKit 설치
 ```
 > **roles/ 디렉토리는 기능별 모듈 구조로 구성되며, 각 role은 tasks/main.yml을 기준으로 실행됩니다.**
@@ -545,6 +548,7 @@ class CallbackModule(CallbackBase):
 | `kafka` | `ap`, `s1`, `s2` | `kafka_prereq` |
 | `hadoop` | `ap`, `s1`, `s2` | `hadoop_prereq` |
 | `elasticsearch` | `ap`, `s1`, `s2` | `elasticsearch_prereq` |
+| `rustfs` | `ap`, `s1`, `s2` | `rustfs_prereq` |
 | `airflow` | `ap`, `s1`, `s2` | `airflow_repo_prereq` |
 | `terraform` | `ap` | `terraform` |
 | `helm` | `ap` | `helm` |
@@ -591,6 +595,10 @@ class CallbackModule(CallbackBase):
 # Elasticsearch 노드 선행작업 (elasticsearch_prereq_ansible.yml)
 #   → 로컬 PV 디렉토리 1종을 root:root 2770(setgid)으로 생성하고 권한 검증
 /project/Infrastructure-as-Code-Ansible/bin/start_elasticsearch_prereq.sh /project/Infrastructure-as-Code-Ansible all
+
+# RustFS 노드 선행작업 (rustfs_prereq_ansible.yml)
+#   → 로컬 PV 디렉토리 1종을 root:root 2770(setgid)으로 생성하고 권한 검증
+/project/Infrastructure-as-Code-Ansible/bin/start_rustfs_prereq.sh /project/Infrastructure-as-Code-Ansible all
 
 # Airflow 노드 선행작업 (airflow_repo_prereq_ansible.yml)
 #   → 304-airflow 선행 구성 / DAG 수정 후 반영은 TARGET=sync
@@ -945,6 +953,43 @@ elasticsearch_prereq
 - **[중요] 노드를 추가할 때도 반드시 이 플레이북을 먼저 실행**
   - `301-elasticsearch/values.yaml` 의 `nodeNames` → 파드 ordinal ↔ 노드 고정표. 디렉토리 없이 표에만 추가하면 PV 마운트에 실패
   - 경로는 `group_vars/elasticsearch.yml` 의 `elasticsearch_data_dir` ↔ 차트 `data.path` 가 글자 그대로 같아야 함
+
+---
+</br>
+
+## 📜 RustFS 플레이북 (`rustfs_prereq_ansible.yml`)
+
+> **RustFS 는 Kubernetes 의 StatefulSet(Terraform 저장소 `301-rustfs`, 3노드 — EC 2+1 로 노드 1대 장애까지 읽기·쓰기 유지)이고, 이 플레이북은 RustFS 가 사용할 노드의 저장공간만 미리 준비합니다.**
+
+---
+
+### 주요 역할
+
+- `ap / s1 / s2`에 `RustFS`용 디렉토리 생성
+  - `/data/rustfs` → EC 조각 + 객체 메타데이터 (설정 버킷 `config` · Airflow 태스크 로그 `airflow-logs`)
+- 디렉토리의 **존재 · 디렉토리 여부 · 그룹 쓰기 권한을 검증**(소유자와 setgid 는 설정만 하고 검증하지 않음)
+- 경로 / 소유 / 권한은 `group_vars/rustfs.yml`에서 관리
+
+---
+
+### 주의사항
+
+- 디렉토리 권한은 **`2770`이 중요** (`kafka_prereq`·`hadoop_prereq`·`elasticsearch_prereq` 와 같은 값·같은 이유 — kubelet 의 fsGroup 처리가 켜는 setgid 비트와 같게 두어 재실행 때 재귀 chown 이 반복되지 않게 한다)
+  - RustFS 컨테이너가 비루트(uid 10001)로 뜨고 파드가 보조 그룹 0(fsGroup)을 붙이므로 그룹 쓰기 권한이 필요함
+
+- **설치 순서**
+```text
+rustfs_prereq
+    ↓
+    ↓
+301-rustfs (Argo CD)
+```
+
+- **[중요] 노드를 늘릴 때도 반드시 이 플레이북을 먼저 실행**
+  - RustFS 는 풀 단위로만 늘어난다 — 기존 3노드 풀에 1대를 끼워 넣을 수 없고, 차트에 새 풀을 설계한다
+  - 경로는 `group_vars/rustfs.yml` 의 `rustfs_data_dir` ↔ 차트 `data.path` 가 글자 그대로 같아야 함
+
+- **etcd·Kafka 와 같은 디스크** — 설정·로그는 쓰기량이 아주 작아 그대로 두지만, 이 디렉토리로 대량 쓰기·벤치는 하지 않는다
 
 ---
 </br>
